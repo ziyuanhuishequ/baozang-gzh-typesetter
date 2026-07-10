@@ -8,7 +8,8 @@
 当前修改维护：清喜  
 清喜博客：[https://sucaizy.com](https://sucaizy.com)
 
-![宝藏排版器主界面](docs/images/v3-clean-workbench.png)
+<img width="1426" height="913" alt="PixPin_2026-07-10_14-19-14" src="https://github.com/user-attachments/assets/bdcef0d1-4f0c-43c9-9fd7-709fb5eacd04" />
+
 
 ## 3.0 版本亮点
 
