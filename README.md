@@ -49,31 +49,35 @@
 
 左侧输入 Markdown，右侧实时预览公众号排版效果。顶部语法按钮支持快速插入标题、加粗、引用、列表、代码块、图片等常用语法。
 
-![主界面和实时预览](docs/images/v3-main-workbench.png)
+<img width="1919" height="1036" alt="v3-main-workbench" src="https://github.com/user-attachments/assets/1c10e7fb-b8d5-4052-8456-e4d7a5128404" />
+
 
 ### 表情包弹窗
 
 点击“表情包插入”后，可以像聊天软件一样选择表情，并在弹窗里切换“小图”或“原图”插入模式。
 
-![表情包弹窗](docs/images/v3-emoji-popover.png)
+<img width="1574" height="1027" alt="v3-emoji-popover" src="https://github.com/user-attachments/assets/7ca5e8c9-0f5f-40a9-b6db-801784b8ffa9" />
+
 
 ### 表情包管理
 
 支持导入单张表情包或整个文件夹，支持 GIF 和常见图片格式。表情包从本地加载，不会增加软件本体体积。
+<img width="1426" height="913" alt="v3-emoji-manager" src="https://github.com/user-attachments/assets/ecf2a1bd-630c-426d-995b-3986a7276d75" />
 
-![表情包管理](docs/images/v3-emoji-manager.png)
 
 ### 手机端样机预览
 
 可切换到手机端样机，提前查看文章在移动端阅读时的排版状态。
 
-![手机端样机预览](docs/images/v3-mobile-mockup.png)
+<img width="1916" height="1035" alt="preview-mobile" src="https://github.com/user-attachments/assets/3f8c1af8-aa82-4eaf-83eb-08fd3c0a8c43" />
+
 
 ### 文章背景设置
 
 文章背景会写入正文，复制到公众号时可以一起带过去。支持透明网格、纸感、点阵等效果，并可调节颜色和深浅。
+<img width="1426" height="913" alt="v3-background-settings" src="https://github.com/user-attachments/assets/f740fefa-0851-4a61-a9fb-882c86e5b0e2" />
 
-![文章背景设置](docs/images/v3-background-settings.png)
+
 
 ## 核心功能
 
@@ -101,6 +105,9 @@
 - 增加手机端、电脑端样机预览。
 - 增加组件设计、组件预设、封面署名预设、历史文章样式和文章背景设置。
 - 增加更适合普通创作者使用的可视化操作界面。
+
+## 下载地址
+夸克：https://pan.quark.cn/s/f362f3411bec
 
 ## 安装与运行
 
