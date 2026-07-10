@@ -1,0 +1,50 @@
+{
+  "name": "gzh-design-live-preview",
+  "version": "2.0.0",
+  "private": false,
+  "author": "清喜",
+  "license": "AGPL-3.0-or-later",
+  "description": "Offline Electron live preview tool for gzh-design skill templates.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/smoke-check.js",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.sucaizy.gzhdesigner",
+    "productName": "宝藏排版器",
+    "electronVersion": "36.9.5",
+    "artifactName": "宝藏排版器-${version}-win-portable.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/skill",
+        "to": "skill"
+      }
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "win": {
+      "icon": "build/app-icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "36.9.5",
+    "electron-builder": "^26.0.12"
+  }
+}

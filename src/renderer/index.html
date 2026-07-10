@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>宝藏排版器</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app">
+    <section class="workspace">
+      <aside class="settings">
+        <section class="panel">
+          <div class="panel-head">
+            <span>主题模板</span>
+            <small id="templateCount">加载中</small>
+          </div>
+          <select id="themeSelect" class="select"></select>
+          <p id="themeScene" class="hint">主题加载后会显示适用场景。</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <span>封面与署名</span>
+          </div>
+          <div class="preset-row">
+            <select id="profilePresetSelect" class="select" title="选择封面与署名预设"></select>
+          </div>
+          <div class="preset-row">
+            <input id="profilePresetName" placeholder="输入预设名称">
+            <button id="saveProfilePresetBtn" class="mini-toggle" type="button">保存预设</button>
+          </div>
+          <div class="preset-row secondary">
+            <button id="resetProfileBtn" class="mini-toggle" type="button">默认文案</button>
+            <button id="deleteProfilePresetBtn" class="mini-toggle danger" type="button">删除预设</button>
+          </div>
+          <label class="field">
+            <span>文章标题</span>
+            <input id="articleTitle" placeholder="公众号 Markdown 排版">
+          </label>
+          <label class="field">
+            <span>顶部标签</span>
+            <input id="coverLabel" placeholder="自动取主题标签">
+          </label>
+          <label class="field">
+            <span>封面副标题</span>
+            <input id="coverSubtitle" placeholder="留空取开头引用">
+          </label>
+          <label class="field">
+            <span>作者名</span>
+            <input id="authorName" placeholder="{{作者名}}">
+          </label>
+          <label class="field">
+            <span>一句话简介</span>
+            <input id="authorBio" placeholder="{{一句话简介}}">
+          </label>
+          <label class="field">
+            <span>结尾互动文案</span>
+            <input id="ctaText" value="如果觉得有用，欢迎点赞、在看、转发三连。">
+          </label>
+        </section>
+
+        <section class="panel compact">
+          <div class="panel-head">
+            <span>预览样机</span>
+          </div>
+          <p class="hint">默认是普通预览，也可以切换到手机或电脑样机查看文章效果。</p>
+          <div class="mockup-switch" id="mockupSwitch">
+            <button class="mockup-btn active" data-mode="default" type="button">默认</button>
+            <button class="mockup-btn" data-mode="phone" type="button">手机端</button>
+            <button class="mockup-btn" data-mode="desktop" type="button">电脑端</button>
+          </div>
+          <p class="hint">图片可直接 Ctrl+V 粘贴，或用编辑器上方“IMG”插入 URL。</p>
+        </section>
+
+        <section class="panel compact">
+          <div class="panel-head">
+            <span>文章背景</span>
+          </div>
+          <div class="background-switch" id="backgroundSwitch">
+            <button class="bg-btn active" data-bg="none" type="button">
+              <span class="bg-swatch swatch-none"></span>
+              原始
+            </button>
+            <button class="bg-btn" data-bg="grid" type="button">
+              <span class="bg-swatch swatch-grid"></span>
+              网格
+            </button>
+            <button class="bg-btn" data-bg="paper" type="button">
+              <span class="bg-swatch swatch-paper"></span>
+              纸感
+            </button>
+            <button class="bg-btn" data-bg="dots" type="button">
+              <span class="bg-swatch swatch-dots"></span>
+              点阵
+            </button>
+            <button class="bg-btn" data-bg="mist" type="button">
+              <span class="bg-swatch swatch-mist"></span>
+              雾白
+            </button>
+            <button class="bg-btn" data-bg="mint" type="button">
+              <span class="bg-swatch swatch-mint"></span>
+              青绿
+            </button>
+          </div>
+          <div class="bg-tune">
+            <label class="bg-color-field">
+              <span>颜色</span>
+              <input id="backgroundColor" type="color" value="#94a3b8">
+            </label>
+            <label class="bg-range-field">
+              <span>深浅 <b id="backgroundStrengthValue">18%</b></span>
+              <input id="backgroundStrength" type="range" min="4" max="32" step="1" value="18">
+            </label>
+          </div>
+          <p class="hint">背景会写入文章正文，复制到公众号时会一起带过去。</p>
+        </section>
+
+        <section class="panel compact link-panel">
+          <button id="githubBtn" class="link-btn" type="button">
+            <span>GitHub</span>
+            <small>查看源项目</small>
+          </button>
+          <button id="sucaizyBtn" class="link-btn primary-link" type="button">
+            <span>获取更多黑科技</span>
+            <small>sucaizy.com</small>
+          </button>
+        </section>
+      </aside>
+
+      <section class="editor">
+        <div class="pane-title">
+          <div>
+            <span>Markdown 输入</span>
+            <small id="meta">0 字</small>
+          </div>
+          <div class="syntax-head-actions">
+            <small>点击下方语法即可插入或包裹选中文案</small>
+            <button id="emojiQuickBtn" class="mini-toggle" type="button">表情包插入</button>
+            <button id="syntaxToggle" class="mini-toggle" type="button">收起语法</button>
+          </div>
+        </div>
+        <section id="syntaxBar" class="syntax-bar"></section>
+        <section id="assetStrip" class="asset-strip" aria-label="图片附件"></section>
+        <textarea id="source" spellcheck="false" placeholder="粘贴 Markdown 或纯文本。支持 Ctrl+V 粘贴图片。"></textarea>
+        <section id="emojiQuickPopover" class="emoji-popover" aria-hidden="true">
+          <div class="emoji-popover-head">
+            <strong>选择表情包</strong>
+            <div class="emoji-mode-switch">
+              <button class="emoji-mode-btn active" data-emoji-mode="tiny" type="button">小图</button>
+              <button class="emoji-mode-btn" data-emoji-mode="original" type="button">原图</button>
+            </div>
+          </div>
+          <div id="emojiQuickGrid" class="emoji-quick-grid"></div>
+        </section>
+      </section>
+
+      <section class="output">
+        <div class="output-tabs">
+          <div class="tab-group">
+            <button id="previewTab" class="tab active" type="button">公众号预览</button>
+            <button id="htmlTab" class="tab hidden-action" type="button" hidden>HTML</button>
+            <button id="emojiTab" class="tab" type="button">表情包管理</button>
+            <button id="templatesTab" class="tab" type="button">如何公众号发布文章</button>
+          </div>
+          <div class="top-actions">
+            <button id="settingsToggle" class="btn subtle" type="button">显示设置</button>
+            <button id="sampleBtn" class="btn ghost" type="button">载入语法示例</button>
+            <button id="copyHtmlBtn" class="btn hidden-action" type="button" hidden>复制 HTML</button>
+            <button id="copyRichBtn" class="btn primary" type="button">复制到公众号</button>
+          </div>
+        </div>
+
+        <div id="previewWrap" class="preview-wrap">
+          <article id="preview" class="wechat-page"></article>
+        </div>
+        <pre id="htmlOut" class="html-out"></pre>
+        <section id="emojiPanel" class="emoji-panel">
+          <div class="emoji-toolbar">
+            <div>
+              <strong>本地表情包</strong>
+              <small>先选择插入模式，再点击表情即可插入到文中</small>
+            </div>
+            <div class="emoji-import-actions">
+              <button id="emojiClearBtn" class="btn subtle" type="button">批量删除</button>
+              <button id="emojiFolderBtn" class="btn ghost" type="button">导入文件夹</button>
+              <button id="emojiImportBtn" class="btn primary" type="button">导入表情包</button>
+            </div>
+          </div>
+          <div id="emojiGrid" class="emoji-grid"></div>
+        </section>
+        <section id="templatePanel" class="template-panel wechat-panel">
+          <section class="wechat-connect-card">
+            <div class="wechat-connect-icon">微</div>
+            <p class="wechat-kicker">WECHAT OFFICIAL ACCOUNT</p>
+            <h2>连接微信公众号后台</h2>
+            <p class="wechat-copy">登录后可进入公众号草稿页，把左侧排好的文章粘贴到编辑器中继续编辑、保存草稿或发布。</p>
+            <div class="wechat-actions">
+              <button id="wechatLoginBtn" class="wechat-primary" type="button">登录微信公众号</button>
+            </div>
+            <p id="wechatNetworkHint" class="wechat-hint">此功能需要连接网络；无网络时会提醒你先联网。</p>
+          </section>
+          <section class="wechat-steps">
+            <div>
+              <strong>1</strong>
+              <span>点击登录微信公众号并扫码</span>
+            </div>
+            <div>
+              <strong>2</strong>
+              <span>点击右上角“复制到公众号”</span>
+            </div>
+            <div>
+              <strong>3</strong>
+              <span>在公众号编辑器内粘贴并保存草稿</span>
+            </div>
+          </section>
+        </section>
+      </section>
+    </section>
+  </main>
+  <section id="copyToast" class="copy-toast" aria-hidden="true">
+    <div class="copy-toast-card">
+      <button id="copyToastClose" class="copy-toast-close" type="button" aria-label="关闭">×</button>
+      <div class="copy-toast-mark">✓</div>
+      <p class="copy-toast-kicker">复制成功</p>
+      <h2>已复制为公众号富文本</h2>
+      <p id="copyToastText">现在打开公众号编辑器，直接粘贴即可。</p>
+      <div class="copy-toast-actions">
+        <button id="copyToastWechat" class="copy-toast-primary" type="button">打开公众号后台</button>
+        <button id="copyToastMore" class="copy-toast-secondary" type="button">更多有趣内容</button>
+      </div>
+    </div>
+  </section>
+  <span id="status" hidden></span>
+  <span id="quality" hidden></span>
+  <script src="./app.js"></script>
+</body>
+</html>
