@@ -10,6 +10,27 @@
   <main class="app">
     <section class="workspace">
       <aside class="settings">
+        <section class="panel component-settings-panel">
+          <div class="panel-head">
+            <span>组件设计</span>
+            <button id="componentCollapseBtn" class="mini-toggle" type="button">收起</button>
+          </div>
+          <div id="componentSettingsBody" class="component-settings-body">
+            <div class="preset-row">
+              <select id="componentPresetSelect" class="select" title="选择组件预设"></select>
+            </div>
+            <div class="preset-row">
+              <input id="componentPresetName" placeholder="输入组件预设名称">
+              <button id="saveComponentPresetBtn" class="mini-toggle" type="button">保存预设</button>
+            </div>
+            <div class="preset-row secondary">
+              <button id="componentResetBtn" class="mini-toggle" type="button">默认组件</button>
+              <button id="deleteComponentPresetBtn" class="mini-toggle danger" type="button">删除预设</button>
+            </div>
+            <div id="componentGroups" class="component-groups compact-groups"></div>
+          </div>
+        </section>
+
         <section class="panel">
           <div class="panel-head">
             <span>主题模板</span>
@@ -121,10 +142,6 @@
             <span>GitHub</span>
             <small>查看源项目</small>
           </button>
-          <button id="sucaizyBtn" class="link-btn primary-link" type="button">
-            <span>获取更多黑科技</span>
-            <small>sucaizy.com</small>
-          </button>
         </section>
       </aside>
 
@@ -228,6 +245,19 @@
       <div class="copy-toast-actions">
         <button id="copyToastWechat" class="copy-toast-primary" type="button">打开公众号后台</button>
         <button id="copyToastMore" class="copy-toast-secondary" type="button">更多有趣内容</button>
+      </div>
+    </div>
+  </section>
+  <section id="clearAssetsDialog" class="confirm-dialog" aria-hidden="true">
+    <div class="confirm-card">
+      <button id="clearAssetsCancelX" class="copy-toast-close" type="button" aria-label="关闭">×</button>
+      <div class="confirm-mark">!</div>
+      <p class="copy-toast-kicker">图片附件清理</p>
+      <h2>确认清空图片附件？</h2>
+      <p id="clearAssetsText">这会清空当前附件栏里的图片缓存，不会删除软件内置资源文件。</p>
+      <div class="copy-toast-actions">
+        <button id="clearAssetsCancel" class="copy-toast-secondary" type="button">取消</button>
+        <button id="clearAssetsConfirm" class="danger-primary" type="button">确认全清</button>
       </div>
     </div>
   </section>

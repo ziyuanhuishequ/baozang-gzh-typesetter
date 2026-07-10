@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("gzhApp", {
   loadSkill: () => ipcRenderer.invoke("skill:load"),
   writeHtml: (html, text, imagePath) => ipcRenderer.invoke("clipboard:writeHtml", html, text, imagePath),
   cacheImage: (name, dataUrl) => ipcRenderer.invoke("image:cache", name, dataUrl),
+  readImageFile: (filePath) => ipcRenderer.invoke("image:readFile", filePath),
   resolveLocalImage: (src) => ipcRenderer.invoke("image:resolveLocal", src),
   readImage: () => ipcRenderer.invoke("clipboard:readImage"),
   pickImage: () => ipcRenderer.invoke("dialog:pickImage"),

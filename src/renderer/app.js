@@ -17,7 +17,16 @@
   settingsCollapsed: true,
   syntaxCollapsed: false,
   backgroundColor: "#94a3b8",
-  backgroundStrength: 18
+  backgroundStrength: 18,
+  componentStyle: {
+    cover: "classic",
+    toc: "cards",
+    chapter: "numbered",
+    quote: "accent",
+    image: "framed",
+    footer: "soft"
+  },
+  componentCollapsed: false
 };
 
 const els = {
@@ -51,6 +60,14 @@ const els = {
   templateSummary: document.getElementById("templateSummary"),
   emojiTab: document.getElementById("emojiTab"),
   emojiPanel: document.getElementById("emojiPanel"),
+  componentGroups: document.getElementById("componentGroups"),
+  componentResetBtn: document.getElementById("componentResetBtn"),
+  componentSettingsBody: document.getElementById("componentSettingsBody"),
+  componentCollapseBtn: document.getElementById("componentCollapseBtn"),
+  componentPresetSelect: document.getElementById("componentPresetSelect"),
+  componentPresetName: document.getElementById("componentPresetName"),
+  saveComponentPresetBtn: document.getElementById("saveComponentPresetBtn"),
+  deleteComponentPresetBtn: document.getElementById("deleteComponentPresetBtn"),
   emojiImportBtn: document.getElementById("emojiImportBtn"),
   emojiFolderBtn: document.getElementById("emojiFolderBtn"),
   emojiClearBtn: document.getElementById("emojiClearBtn"),
@@ -65,6 +82,11 @@ const els = {
   copyToastText: document.getElementById("copyToastText"),
   copyToastWechat: document.getElementById("copyToastWechat"),
   copyToastMore: document.getElementById("copyToastMore"),
+  clearAssetsDialog: document.getElementById("clearAssetsDialog"),
+  clearAssetsText: document.getElementById("clearAssetsText"),
+  clearAssetsCancel: document.getElementById("clearAssetsCancel"),
+  clearAssetsCancelX: document.getElementById("clearAssetsCancelX"),
+  clearAssetsConfirm: document.getElementById("clearAssetsConfirm"),
   settingsToggle: document.getElementById("settingsToggle"),
   profilePresetSelect: document.getElementById("profilePresetSelect"),
   profilePresetName: document.getElementById("profilePresetName"),
@@ -83,6 +105,154 @@ const defaultProfile = {
 };
 
 const profilePresetKey = "gzh-profile-presets";
+const componentPresetKey = "gzh-component-presets";
+
+const defaultComponentStyle = {
+  cover: "classic",
+  toc: "cards",
+  chapter: "numbered",
+  quote: "accent",
+  image: "framed",
+  footer: "soft"
+};
+
+const componentOptions = [
+  {
+    key: "cover",
+    title: "头图信息卡",
+    desc: "对应原主题里的封面、标题卡、开篇信息区。",
+    options: [
+      { id: "classic", name: "经典信息卡", desc: "标题、标签、日期和副标题集中展示，适合大多数文章。" },
+      { id: "split", name: "分栏标题卡", desc: "左侧标题，右侧信息标签，更像工具说明页。" },
+      { id: "minimal", name: "极简封面", desc: "减少边框和装饰，适合观点文和轻阅读。" }
+    ]
+  },
+  {
+    key: "toc",
+    title: "目录组件",
+    desc: "对应原主题里的目录导航、章节导读和横向滑动卡。",
+    options: [
+      { id: "cards", name: "彩色横滑卡", desc: "多个 PART 彩色卡片，视觉锚点强。" },
+      { id: "list", name: "纵向导读", desc: "更安静，适合长文和教程。" },
+      { id: "none", name: "不显示目录", desc: "短文章可关闭，减少首屏干扰。" }
+    ]
+  },
+  {
+    key: "chapter",
+    title: "章节标题",
+    desc: "对应原主题里的 chapter-title、PART 标题和小节锚点。",
+    options: [
+      { id: "numbered", name: "编号章节", desc: "01 / PART 的经典结构，适合教程和清单。" },
+      { id: "badge", name: "徽章章节", desc: "彩色标签加标题，标题显示更完整。" },
+      { id: "line", name: "竖线章节", desc: "更简洁，适合深度观点和随笔。" }
+    ]
+  },
+  {
+    key: "quote",
+    title: "引用与提示",
+    desc: "对应原主题里的引言卡、金句、提示块和信息卡。",
+    options: [
+      { id: "accent", name: "主色引用", desc: "左侧主色竖线，稳妥耐看。" },
+      { id: "card", name: "浅底卡片", desc: "更像信息提示，适合重点说明。" },
+      { id: "quote", name: "金句居中", desc: "适合放观点、摘要、开篇金句。" }
+    ]
+  },
+  {
+    key: "image",
+    title: "图片组件",
+    desc: "对应原主题里的图片、GIF、截图容器。",
+    options: [
+      { id: "framed", name: "轻边框图片", desc: "默认样式，截图边界更清楚。" },
+      { id: "plain", name: "原图展示", desc: "无边框无阴影，适合表情包和透明图片。" },
+      { id: "soft", name: "柔和卡片", desc: "带浅底和圆角，适合软件截图。" }
+    ]
+  },
+  {
+    key: "footer",
+    title: "结尾组件",
+    desc: "对应原主题里的作者签名、CTA、品牌尾图。",
+    options: [
+      { id: "soft", name: "柔和结尾", desc: "浅底卡片，适合日常文章。" },
+      { id: "brand", name: "品牌强调", desc: "更突出作者署名和互动引导。" },
+      { id: "minimal", name: "极简结尾", desc: "只保留文字和细分割线。" }
+    ]
+  }
+];
+
+function normalizeComponentStyle(style = {}) {
+  return { ...defaultComponentStyle, ...style };
+}
+
+function readComponentPresets() {
+  try {
+    const data = JSON.parse(localStorage.getItem(componentPresetKey) || "[]");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeComponentPresets(presets) {
+  localStorage.setItem(componentPresetKey, JSON.stringify(presets));
+}
+
+function renderComponentPresets(selectedName = "__default") {
+  if (!els.componentPresetSelect) return;
+  const presets = readComponentPresets();
+  els.componentPresetSelect.innerHTML = `<option value="__default">默认组件</option>`;
+  for (const preset of presets) {
+    const opt = document.createElement("option");
+    opt.value = preset.name;
+    opt.textContent = preset.name;
+    els.componentPresetSelect.appendChild(opt);
+  }
+  els.componentPresetSelect.value = presets.some((item) => item.name === selectedName) ? selectedName : "__default";
+}
+
+function saveComponentPreset() {
+  const activeTheme = state.themes.find((t) => t.id === els.themeSelect.value);
+  const fallback = activeTheme ? `${activeTheme.name}组件` : "我的组件预设";
+  const name = (els.componentPresetName?.value || fallback).trim();
+  if (!name) {
+    els.status.textContent = "请先输入组件预设名称";
+    return;
+  }
+  const presets = readComponentPresets().filter((item) => item.name !== name);
+  presets.unshift({
+    name,
+    style: normalizeComponentStyle(state.componentStyle),
+    updatedAt: new Date().toISOString()
+  });
+  writeComponentPresets(presets.slice(0, 30));
+  renderComponentPresets(name);
+  if (els.componentPresetName) els.componentPresetName.value = "";
+  els.status.textContent = `已保存组件预设：${name}`;
+  saveState();
+}
+
+function deleteComponentPreset() {
+  const name = els.componentPresetSelect?.value;
+  if (!name || name === "__default") return;
+  const presets = readComponentPresets().filter((item) => item.name !== name);
+  writeComponentPresets(presets);
+  renderComponentPresets("__default");
+  els.status.textContent = `已删除组件预设：${name}`;
+}
+
+function setComponentStyle(style, selectedPreset = "__default") {
+  state.componentStyle = normalizeComponentStyle(style);
+  renderComponentPanel();
+  renderComponentPresets(selectedPreset);
+  renderArticle();
+}
+
+function setComponentCollapsed(collapsed) {
+  state.componentCollapsed = Boolean(collapsed);
+  els.componentSettingsBody?.classList.toggle("collapsed", state.componentCollapsed);
+  if (els.componentCollapseBtn) {
+    els.componentCollapseBtn.textContent = state.componentCollapsed ? "展开" : "收起";
+  }
+}
 
 function profileFields() {
   return {
@@ -358,7 +528,7 @@ function inline(text, theme) {
     const asset = state.assets[id];
     const src = asset?.dataUrl || asset?.fileUrl || "";
     if (!src) return "";
-    return `<img src="${esc(src)}" alt="${esc(asset.name || "表情")}" style="width:22px;height:22px;display:inline-block;vertical-align:-5px;margin:0 2px;border:0;object-fit:contain;">`;
+    return `<span leaf=""><img src="${esc(src)}" alt="${esc(asset.name || "表情")}" style="width:22px;height:22px;display:inline-block;vertical-align:-5px;margin:0 2px;border:0;box-shadow:none;object-fit:contain;"></span>`;
   });
   safe = safe.replace(/`([^`]+)`/g, `<span style="background:#F3F4F6;color:${theme.mainColor};padding:2px 6px;border-radius:4px;font-size:13px;font-weight:600;"><span leaf="">$1</span></span>`);
   safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<span style="color:${theme.mainColor};border-bottom:1px solid ${theme.underlineColor};font-weight:600;"><span leaf="">$1</span></span>`);
@@ -463,7 +633,23 @@ function createAsset(name, dataUrl, fileUrl = "", filePath = "", meta = {}) {
 }
 
 function emojiSrc(emoji) {
-  return emoji.dataUrl || emoji.fileUrl || "";
+  return emoji.fileUrl || emoji.dataUrl || "";
+}
+
+async function hydrateEmojiImage(emoji) {
+  if (emoji?.dataUrl || !emoji?.filePath || !window.gzhApp?.readImageFile) return emoji;
+  try {
+    const image = await window.gzhApp.readImageFile(emoji.filePath);
+    if (!image?.dataUrl) return emoji;
+    emoji.dataUrl = image.dataUrl;
+    emoji.fileUrl = image.fileUrl || emoji.fileUrl || "";
+    emoji.filePath = image.filePath || emoji.filePath || "";
+    emoji.mime = image.mime || emoji.mime || "";
+    saveState();
+  } catch (error) {
+    console.warn("hydrate emoji failed", error);
+  }
+  return emoji;
 }
 
 function renderEmojiPanel() {
@@ -563,8 +749,13 @@ async function importEmojiImages(source = "files") {
   els.status.textContent = `已导入 ${images.length} 个表情包`;
 }
 
-function insertEmoji(emoji, mode) {
-  const id = createAsset(emoji.name, emojiSrc(emoji), emoji.fileUrl || "", emoji.filePath || "", { emojiPlain: mode === "original" });
+async function insertEmoji(emoji, mode) {
+  await hydrateEmojiImage(emoji);
+  const id = createAsset(emoji.name, emoji.dataUrl || emoji.fileUrl || "", emoji.fileUrl || "", emoji.filePath || "", {
+    emojiAsset: true,
+    emojiInline: mode === "tiny",
+    emojiPlain: mode === "original"
+  });
   if (mode === "tiny") {
     insertText(`{{emoji:${id}}}`);
     setMode("preview");
@@ -600,21 +791,28 @@ function resolveImageSrc(src) {
 async function seedDemoEmojiAssets() {
   if (!window.gzhApp?.resolveLocalImage) return;
   const demos = [
-    { id: "demo-emoji-aru", src: "./assets/demo-emoji-aru.gif", name: "示例表情包" }
+    {
+      id: "demo-emoji-aru",
+      src: "./assets/demo-emoji-aru.gif",
+      name: "示例表情包"
+    }
   ];
   for (const demo of demos) {
-    if (state.assets[demo.id]) continue;
     try {
       const image = await window.gzhApp.resolveLocalImage(demo.src);
       if (!image?.dataUrl) continue;
       state.assets[demo.id] = {
+        ...(state.assets[demo.id] || {}),
         id: demo.id,
         name: demo.name,
         dataUrl: image.dataUrl,
         fileUrl: image.fileUrl || "",
         filePath: image.filePath || "",
-        emojiPlain: true
+        emojiAsset: true,
+        emojiInline: false
       };
+      delete state.assets[demo.id].copyUrl;
+      delete state.assets[demo.id].emojiPlain;
     } catch (error) {
       console.warn("seed demo emoji failed", error);
     }
@@ -649,6 +847,9 @@ async function importLocalMarkdownImages() {
       }
       const name = alt || image.name || "本地图片.png";
       const id = createAsset(name, image.dataUrl, image.fileUrl || "", image.filePath || "");
+      if (/demo-preview/i.test(src) || /demo-preview/i.test(name)) {
+        state.assets[id].demoAsset = true;
+      }
       next += `![${name}](asset://${id})`;
       changed = true;
     } catch (error) {
@@ -668,9 +869,11 @@ async function importLocalMarkdownImages() {
 function clipboardHtml(html) {
   let next = stripPreviewMarks(html);
   for (const asset of Object.values(state.assets)) {
-    if (!asset?.dataUrl || !asset?.fileUrl) continue;
-    next = next.split(esc(asset.dataUrl)).join(esc(asset.fileUrl));
-    next = next.split(asset.dataUrl).join(asset.fileUrl);
+    if (!asset?.dataUrl) continue;
+    const copyUrl = asset.copyFileUrl || asset.fileUrl || "";
+    if (!copyUrl) continue;
+    next = next.split(esc(asset.dataUrl)).join(esc(copyUrl));
+    next = next.split(asset.dataUrl).join(copyUrl);
   }
   return next;
 }
@@ -684,6 +887,14 @@ function renderAssets() {
   addBtn.textContent = "+ 添加图片";
   addBtn.addEventListener("click", insertLocalImage);
   els.assetStrip.appendChild(addBtn);
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "asset-clear";
+  clearBtn.textContent = "图片全清";
+  clearBtn.title = "清空图片附件栏，点击后需要再次确认";
+  clearBtn.addEventListener("click", clearAllAssets);
+  els.assetStrip.appendChild(clearBtn);
 
   const help = document.createElement("div");
   help.className = "asset-help";
@@ -708,6 +919,37 @@ function renderAssets() {
     });
     els.assetStrip.appendChild(card);
   }
+}
+
+function clearAllAssets() {
+  const count = Object.keys(state.assets).length;
+  if (!count) {
+    els.status.textContent = "当前没有图片可以清理";
+    return;
+  }
+  showClearAssetsDialog(count);
+}
+
+function showClearAssetsDialog(count) {
+  if (!els.clearAssetsDialog) return;
+  els.clearAssetsText.textContent = `将清空当前附件栏里的 ${count} 张图片缓存，并移除当前文章里已缓存的图片和表情包引用。不会删除软件内置资源文件；需要示例时可重新点击“载入语法示例”。`;
+  els.clearAssetsDialog.classList.add("show");
+  els.clearAssetsDialog.setAttribute("aria-hidden", "false");
+}
+
+function hideClearAssetsDialog() {
+  els.clearAssetsDialog?.classList.remove("show");
+  els.clearAssetsDialog?.setAttribute("aria-hidden", "true");
+}
+
+function confirmClearAllAssets() {
+  const count = Object.keys(state.assets).length;
+  state.assets = {};
+  renderAssets();
+  renderArticle();
+  saveState();
+  hideClearAssetsDialog();
+  els.status.textContent = `已清空 ${count} 张图片附件`;
 }
 
 function removeAsset(id) {
@@ -738,6 +980,30 @@ function renderCover(title, subtitle, theme) {
   const line2 = title.length > 16 ? title.slice(16, 34) : "";
   const label = els.coverLabel.value.trim() || theme.label;
   const editDate = state.editedAt || todayStamp();
+  const style = state.componentStyle.cover;
+  if (style === "split") {
+    return `<section data-profile-target="cover" style="margin:0 0 32px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:18px;padding:26px 24px;box-shadow:0 8px 26px rgba(15,23,42,0.07);">
+  <section style="display:flex;align-items:stretch;gap:18px;">
+    <section style="flex:1;min-width:0;">
+      <p style="font-size:11px;font-weight:900;letter-spacing:2.5px;color:${theme.mainColor};margin:0 0 14px;">${leaf(label)}</p>
+      <p style="font-size:25px;font-weight:900;color:#0F172A;margin:0;line-height:1.16;">${leaf(line1)}</p>
+      ${line2 ? `<p style="font-size:25px;font-weight:900;color:${theme.mainColor};margin:0 0 12px;line-height:1.16;">${leaf(line2)}</p>` : ""}
+      <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
+    </section>
+    <section style="width:92px;flex-shrink:0;border-left:1px solid ${theme.underlineColor};padding-left:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;">
+      <span style="display:inline-block;width:34px;height:34px;border-radius:12px;background:${theme.mainColor};color:#fff;text-align:center;line-height:34px;font-size:14px;font-weight:900;"><span leaf="">G</span></span>
+      <span style="font-size:11px;color:#94A3B8;font-weight:800;line-height:1.5;">${leaf(editDate)}</span>
+    </section>
+  </section>
+</section>`;
+  }
+  if (style === "minimal") {
+    return `<section data-profile-target="cover" style="margin:0 20px 34px;padding:24px 0 20px;border-bottom:1px solid ${theme.underlineColor};">
+  <p style="font-size:10px;font-weight:900;letter-spacing:3px;color:${theme.mainColor};margin:0 0 14px;">${leaf(label)} · ${leaf(editDate)}</p>
+  <p style="font-size:27px;font-weight:900;color:#0F172A;margin:0;line-height:1.18;">${leaf(title)}</p>
+  <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
+</section>`;
+  }
   return `<section data-profile-target="cover" style="margin:0 0 32px;background:#fff;border:1.5px solid ${theme.underlineColor};border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06);width:100%;">
   <section style="padding:32px 28px 28px;">
     <section style="display:flex;align-items:center;gap:8px;margin-bottom:28px;">
@@ -756,6 +1022,20 @@ function renderCover(title, subtitle, theme) {
 
 function renderToc(headings, theme) {
   if (headings.length < 2) return "";
+  if (state.componentStyle.toc === "none") return "";
+  if (state.componentStyle.toc === "list") {
+    const items = headings.slice(0, 6).map((h, i) => `<section style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+  <span style="display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:${themeSoft(theme)};color:${theme.mainColor};font-size:11px;font-weight:900;">${leaf(String(i + 1).padStart(2, "0"))}</span>
+  <section style="flex:1;border-bottom:1px solid #EEF2F7;padding-bottom:10px;">
+    <p style="margin:0;font-size:14px;font-weight:850;color:#111827;line-height:1.55;">${leaf(h)}</p>
+    <p style="margin:2px 0 0;font-size:10px;font-weight:700;color:#94A3B8;letter-spacing:1.2px;">${leaf(enLabel(h))}</p>
+  </section>
+</section>`).join("");
+    return `<section style="margin:0 20px 32px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px;">
+  <p style="font-size:11px;color:${theme.mainColor};font-weight:900;letter-spacing:1.8px;margin:0 0 14px;">${leaf("ARTICLE GUIDE")}</p>
+  ${items}
+</section>`;
+  }
   const palette = [
     [theme.mainColor, themeDeep(theme)],
     ["#0EA5E9", "#0369A1"],
@@ -780,6 +1060,94 @@ function renderToc(headings, theme) {
   </section>
   <section style="overflow-x:scroll;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:8px;">${cards}</section>
 </section>`;
+}
+
+function renderChapterTitle(block, chapterNo, theme) {
+  const no = /最后|总结|结语/.test(block.text) ? "///" : String(chapterNo).padStart(2, "0");
+  const part = no === "///" ? "LAST" : "PART";
+  if (state.componentStyle.chapter === "badge") {
+    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+  <section style="margin-bottom:24px;">
+    <section style="display:inline-block;background:${theme.mainColor};border-radius:999px;padding:5px 12px;margin-bottom:12px;">
+      <span style="font-size:11px;font-weight:900;color:#FFFFFF;letter-spacing:1px;">${leaf(`${part} ${no}`)}</span>
+    </section>
+    <p style="margin:0;font-size:20px;font-weight:900;color:#111827;line-height:1.45;">${leaf(block.text)}</p>
+    <p style="margin:4px 0 0;font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:1.5px;">${leaf(enLabel(block.text))}</p>
+  </section>
+`;
+  }
+  if (state.componentStyle.chapter === "line") {
+    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+  <section style="border-left:5px solid ${theme.mainColor};padding-left:14px;margin-bottom:24px;">
+    <p style="margin:0 0 4px;font-size:11px;font-weight:900;color:${theme.mainColor};letter-spacing:1.5px;">${leaf(`${part} ${no}`)}</p>
+    <p style="margin:0;font-size:20px;font-weight:900;color:#111827;line-height:1.45;">${leaf(block.text)}</p>
+  </section>
+`;
+  }
+  return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+  <section style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+    <section style="text-align:center;flex-shrink:0;"><p style="margin:0;font-size:28px;font-weight:900;color:${theme.mainColor};line-height:1;">${leaf(no)}</p><p style="margin:0;font-size:8px;font-weight:700;color:#D1D5DB;letter-spacing:2px;">${leaf(part)}</p></section>
+    <span style="width:1px;height:36px;background:#E5E7EB;flex-shrink:0;"><span leaf=""><br></span></span>
+    <section><p style="margin:0 0 1px;font-size:17px;font-weight:900;color:#111827;letter-spacing:0.3px;">${leaf(block.text)}</p><p style="margin:0;font-size:11px;font-weight:600;color:#9CA3AF;letter-spacing:1.5px;">${leaf(enLabel(block.text))}</p></section>
+  </section>`;
+}
+
+function renderQuoteBlock(block, theme) {
+  const text = block.text.replace(/^「|」$/g, "");
+  if (state.componentStyle.quote === "card") {
+    return `<section${previewMark(block)} style="margin:0 20px 24px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;box-shadow:0 6px 18px rgba(15,23,42,0.05);"><p style="font-size:15px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.85;">${leaf(text)}</p></section>`;
+  }
+  if (state.componentStyle.quote === "quote") {
+    return `<section${previewMark(block)} style="margin:0 20px 26px;text-align:center;padding:18px 18px;border-top:1px solid ${theme.underlineColor};border-bottom:1px solid ${theme.underlineColor};"><p style="font-size:17px;font-weight:900;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf(`「${text}」`)}</p></section>`;
+  }
+  return `<section${previewMark(block)} style="margin:0 20px 24px;background:${themeSoft(theme)};border-radius:0 10px 10px 0;border-left:4px solid ${theme.mainColor};padding:16px 20px;"><p style="font-size:16px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf("「" + text + "」")}</p></section>`;
+}
+
+function renderImageBlock(block, theme, chapterNo) {
+  const imageSrc = resolveImageSrc(block.src);
+  const imageAsset = block.src.startsWith("asset://") ? state.assets[block.src.replace("asset://", "")] : null;
+  const imageMargin = chapterNo ? "0 0 8px" : "0 20px 8px";
+  const captionMargin = chapterNo ? "0 0 24px" : "0 20px 24px";
+  const imageWidth = `${block.scale || 100}%`;
+  const plain = imageAsset?.emojiAsset || imageAsset?.emojiPlain || state.componentStyle.image === "plain";
+  let html = "";
+  if (plain) {
+    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;border:0;box-shadow:none;"></span></section>`;
+  } else if (state.componentStyle.image === "soft") {
+    html += `<section${previewMark(block)} style="background:${themeSoft(theme)};border-radius:16px;padding:8px;border:1px solid ${theme.underlineColor};box-shadow:0 8px 18px rgba(15,23,42,0.06);margin:${imageMargin};"><section style="margin:0;border-radius:12px;overflow:hidden;text-align:center;background:#fff;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;"></span></section></section>`;
+  } else {
+    html += `<section${previewMark(block)} style="background:#FFF;border-radius:12px;padding:3px;border:1px solid #E5E7EB;box-shadow:0 4px 12px -2px rgba(0,0,0,0.08);margin:${imageMargin};"><section style="margin:0;border-radius:8px;overflow:hidden;text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;"></span></section></section>`;
+  }
+  if (block.alt && !plain) html += `<p style="font-size:12px;color:#9CA3AF;text-align:center;margin:${captionMargin};">${leaf("— " + block.alt)}</p>`;
+  return html;
+}
+
+function renderAuthorBlock(authorText, theme) {
+  if (state.componentStyle.footer === "brand") {
+    return `<section data-profile-target="author" style="margin:30px 20px 14px;background:${theme.mainColor};border-radius:16px;padding:18px 20px;box-shadow:0 10px 24px rgba(15,23,42,0.12);">
+  <p style="margin:0 0 6px;font-size:11px;font-weight:900;letter-spacing:1.6px;color:rgba(255,255,255,0.72);">${leaf("ABOUT AUTHOR")}</p>
+  <p style="margin:0;font-size:15px;font-weight:850;line-height:1.85;color:#FFFFFF;text-align:justify;">${leaf(authorText)}</p>
+</section>`;
+  }
+  if (state.componentStyle.footer === "minimal") {
+    return `<section data-profile-target="author" style="margin:30px 20px 14px;border-top:1px solid ${theme.underlineColor};padding-top:16px;">
+  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${leaf(authorText)}</p>
+</section>`;
+  }
+  return `<section data-profile-target="author" style="margin:28px 20px 14px;background:linear-gradient(135deg,${themeSoft(theme)},#FFFFFF);border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;">
+  <p style="margin:0 0 6px;font-size:11px;font-weight:800;letter-spacing:1.4px;color:${theme.mainColor};">${leaf("ABOUT AUTHOR")}</p>
+  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${leaf(authorText)}</p>
+</section>`;
+}
+
+function renderCtaBlock(cta, theme) {
+  if (state.componentStyle.footer === "brand") {
+    return `<section data-profile-target="cta" style="background:linear-gradient(135deg,${theme.mainColor},${themeDeep(theme)});border-radius:18px;padding:30px 22px;text-align:center;box-shadow:0 12px 28px rgba(15,23,42,0.16);margin:0 20px 24px;"><p style="font-size:14px;font-weight:900;color:#FFFFFF;margin:0 0 14px;line-height:1.75;">${leaf(cta)}</p><p style="font-size:10px;color:rgba(255,255,255,0.68);letter-spacing:1.6px;margin:0;">${leaf("LIKE · SHARE · FOLLOW")}</p></section>`;
+  }
+  if (state.componentStyle.footer === "minimal") {
+    return `<section data-profile-target="cta" style="border-top:1px solid ${theme.underlineColor};margin:0 20px 24px;padding-top:18px;text-align:center;"><p style="font-size:13px;font-weight:800;color:#111827;margin:0;line-height:1.8;">${leaf(cta)}</p></section>`;
+  }
+  return `<section data-profile-target="cta" style="background:radial-gradient(circle at center,#F9FAFB 0%,#FFFFFF 100%);border:1px solid #E5E7EB;border-radius:16px;padding:32px 20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);margin:0 0 24px;"><p style="font-size:13px;font-weight:bold;color:#111827;margin-bottom:20px;line-height:1.6;">${leaf(cta)}</p><p style="font-size:10px;color:#9CA3AF;letter-spacing:1px;margin:0;">${leaf("THANKS FOR READING")}</p></section>`;
 }
 
 function articleBackgroundStyle(name) {
@@ -851,18 +1219,11 @@ function renderArticle() {
       chapterNo += 1;
       historySection = /历史文章|推荐阅读|延伸阅读|往期文章/.test(block.text);
       if (historySection) historyNo = 0;
-      const no = /鏈€鍚巪鎬荤粨|缁撹/.test(block.text) ? "///" : String(chapterNo).padStart(2, "0");
-      const part = no === "///" ? "LAST" : "PART";
-      html += `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
-  <section style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
-    <section style="text-align:center;flex-shrink:0;"><p style="margin:0;font-size:28px;font-weight:900;color:${theme.mainColor};line-height:1;">${leaf(no)}</p><p style="margin:0;font-size:8px;font-weight:700;color:#D1D5DB;letter-spacing:2px;">${leaf(part)}</p></section>
-    <span style="width:1px;height:36px;background:#E5E7EB;flex-shrink:0;"><span leaf=""><br></span></span>
-    <section><p style="margin:0 0 1px;font-size:17px;font-weight:900;color:#111827;letter-spacing:0.3px;">${leaf(block.text)}</p><p style="margin:0;font-size:11px;font-weight:600;color:#9CA3AF;letter-spacing:1.5px;">${leaf(enLabel(block.text))}</p></section>
-  </section>`;
+      html += renderChapterTitle(block, chapterNo, theme);
     } else if (block.type === "h3") {
       html += `<p${previewMark(block)} style="margin:28px 20px 14px;font-size:16px;font-weight:800;color:#1C1917;line-height:1.5;border-left:4px solid ${theme.mainColor};padding-left:12px;">${leaf(block.text)}</p>`;
     } else if (block.type === "quote") {
-      html += `<section${previewMark(block)} style="margin:0 20px 24px;background:${themeSoft(theme)};border-radius:0 10px 10px 0;border-left:4px solid ${theme.mainColor};padding:16px 20px;"><p style="font-size:16px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf("「" + block.text.replace(/^「|」$/g, "") + "」")}</p></section>`;
+      html += renderQuoteBlock(block, theme);
     } else if (block.type === "p") {
       const pad = chapterNo ? "" : "padding:0 20px;";
       html += `<section${previewMark(block)} style="${pad}"><p style="margin-bottom:17px;font-size:15px;line-height:1.92;text-align:justify;color:#334155;">${inline(block.text, theme)}</p></section>`;
@@ -885,17 +1246,7 @@ function renderArticle() {
         html += `<section${previewMark(block)} style="margin-bottom:14px;"><p style="margin:0 0 6px;"><span style="display:inline-block;font-size:13px;font-weight:700;color:${theme.mainColor};background:${themeSoft(theme)};padding:3px 10px;border-radius:999px;"><span style="display:inline-block;width:6px;height:6px;background:${theme.mainColor};border-radius:50%;margin-right:5px;vertical-align:middle;"><span leaf=""><br></span></span>${inline(block.text, theme)}</span></p></section>`;
       }
     } else if (block.type === "image") {
-      const imageSrc = resolveImageSrc(block.src);
-      const imageAsset = block.src.startsWith("asset://") ? state.assets[block.src.replace("asset://", "")] : null;
-      const imageMargin = chapterNo ? "0 0 8px" : "0 20px 8px";
-      const captionMargin = chapterNo ? "0 0 24px" : "0 20px 24px";
-      const imageWidth = `${block.scale || 100}%`;
-      if (imageAsset?.emojiPlain) {
-        html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;border:0;box-shadow:none;"></span></section>`;
-      } else {
-        html += `<section${previewMark(block)} style="background:#FFF;border-radius:12px;padding:3px;border:1px solid #E5E7EB;box-shadow:0 4px 12px -2px rgba(0,0,0,0.08);margin:${imageMargin};"><section style="margin:0;border-radius:8px;overflow:hidden;text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;"></span></section></section>`;
-      }
-      if (block.alt && !imageAsset?.emojiPlain) html += `<p style="font-size:12px;color:#9CA3AF;text-align:center;margin:${captionMargin};">${leaf("— " + block.alt)}</p>`;
+      html += renderImageBlock(block, theme, chapterNo);
     } else if (block.type === "code") {
       const rows = block.text.split("\n").map((line) => `<p style="margin:0;font-family:'SF Mono',Consolas,Monaco,monospace;font-size:13px;line-height:1.6;color:#E2E8F0;">${leaf(line.replace(/  /g, "銆€"))}</p>`).join("");
       html += `<section${previewMark(block)} style="margin:0 20px 20px;border-radius:8px;overflow:hidden;background:#1E293B;box-shadow:0 4px 16px -8px rgba(15,23,42,0.4);"><section style="display:flex;align-items:center;padding:9px 14px;background:#0F172A;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#FF5F56;margin-right:7px;font-size:0;line-height:0;overflow:hidden;"><span leaf=""><br></span></span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#FFBD2E;margin-right:7px;font-size:0;line-height:0;overflow:hidden;"><span leaf=""><br></span></span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#27C93F;font-size:0;line-height:0;overflow:hidden;"><span leaf=""><br></span></span><span style="margin-left:12px;font-size:12px;color:#64748B;font-family:Consolas,Monaco,monospace;letter-spacing:1px;">${leaf(block.lang)}</span></section><section style="padding:11px 14px;">${rows}</section></section>`;
@@ -911,13 +1262,10 @@ function renderArticle() {
   const cta = els.ctaText.value.trim();
   if (author || bio) {
     const authorText = author && bio ? `我是 ${author}，${bio}。` : author ? `我是 ${author}。` : bio;
-    html += `<section data-profile-target="author" style="margin:28px 20px 14px;background:linear-gradient(135deg,${themeSoft(theme)},#FFFFFF);border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;">
-  <p style="margin:0 0 6px;font-size:11px;font-weight:800;letter-spacing:1.4px;color:${theme.mainColor};">${leaf("ABOUT AUTHOR")}</p>
-  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${leaf(authorText)}</p>
-</section>`;
+    html += renderAuthorBlock(authorText, theme);
   }
   if (cta) {
-    html += `<section data-profile-target="cta" style="background:radial-gradient(circle at center,#F9FAFB 0%,#FFFFFF 100%);border:1px solid #E5E7EB;border-radius:16px;padding:32px 20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);margin:0 0 24px;"><p style="font-size:13px;font-weight:bold;color:#111827;margin-bottom:20px;line-height:1.6;">${leaf(cta)}</p><p style="font-size:10px;color:#9CA3AF;letter-spacing:1px;margin:0;">${leaf("THANKS FOR READING")}</p></section>`;
+    html += renderCtaBlock(cta, theme);
   }
   html += "</section>";
 
@@ -1244,6 +1592,45 @@ function handleEditorShortcut(event) {
   action.run();
 }
 
+function renderComponentPanel() {
+  if (!els.componentGroups) return;
+  const theme = state.themes.find((t) => t.id === els.themeSelect.value) || state.themes[0];
+  els.componentGroups.innerHTML = "";
+  for (const group of componentOptions) {
+    const section = document.createElement("section");
+    section.className = "component-group";
+    section.innerHTML = `<div class="component-group-head">
+      <div>
+        <strong>${esc(group.title)}</strong>
+        <small>${esc(group.desc)}</small>
+      </div>
+      <span>${esc(theme?.name || "当前主题")}</span>
+    </div>`;
+    const grid = document.createElement("div");
+    grid.className = "component-choice-grid";
+    for (const option of group.options) {
+      const btn = document.createElement("button");
+      btn.className = "component-choice";
+      btn.type = "button";
+      btn.dataset.group = group.key;
+      btn.dataset.option = option.id;
+      btn.classList.toggle("active", state.componentStyle[group.key] === option.id);
+      btn.innerHTML = `<span class="component-sample ${esc(group.key)}-${esc(option.id)}"></span>
+        <strong>${esc(option.name)}</strong>
+        <small>${esc(option.desc)}</small>`;
+      btn.addEventListener("click", () => {
+        state.componentStyle[group.key] = option.id;
+        renderComponentPanel();
+        renderArticle();
+        saveState();
+      });
+      grid.appendChild(btn);
+    }
+    section.appendChild(grid);
+    els.componentGroups.appendChild(section);
+  }
+}
+
 function setMode(mode) {
   state.mode = mode;
   document.body.classList.toggle("mode-html", mode === "html");
@@ -1383,6 +1770,8 @@ function saveState() {
     previewBackground: state.previewBackground,
     backgroundColor: state.backgroundColor,
     backgroundStrength: state.backgroundStrength,
+    componentStyle: state.componentStyle,
+    componentCollapsed: state.componentCollapsed,
     syntaxCollapsed: state.syntaxCollapsed,
     settingsCollapsed: state.settingsCollapsed,
     editedAt: state.editedAt
@@ -1397,19 +1786,23 @@ function scheduleSaveState(delay = 350) {
 
 function loadState() {
   try {
-    const data = JSON.parse(localStorage.getItem("gzh-electron-state") || "{}");
+    const raw = localStorage.getItem("gzh-electron-state") || "{}";
+    const data = JSON.parse(raw);
     if (data.theme) els.themeSelect.value = data.theme;
     if (data.articleTitle) els.articleTitle.value = data.articleTitle;
-    state.assets = data.assets || {};
-    state.emojis = data.emojis || [];
+    state.assets = {};
+    state.emojis = (data.emojis || []).map((emoji) => ({
+      ...emoji,
+      dataUrl: emoji.filePath || emoji.fileUrl ? "" : emoji.dataUrl
+    }));
     state.emojiInsertMode = data.emojiInsertMode || "tiny";
     state.editedAt = data.editedAt || todayStamp();
-    renderAssets();
-    renderEmojiPanel();
     setEmojiInsertMode(state.emojiInsertMode, false);
     setMockup(data.mockup || "default");
     setPreviewBackground(data.previewBackground || "none");
     setBackgroundTune(data.backgroundColor || "#94a3b8", data.backgroundStrength || 18);
+    state.componentStyle = normalizeComponentStyle(data.componentStyle);
+    setComponentCollapsed(Boolean(data.componentCollapsed));
     setSyntaxCollapsed(data.syntaxCollapsed || false);
     setSettingsCollapsed(true);
     return true;
@@ -1419,6 +1812,10 @@ function loadState() {
 }
 
 async function init() {
+  els.status.textContent = "正在启动宝藏排版器...";
+  els.source.value = markdownSample;
+  if (!els.articleTitle.value) els.articleTitle.value = defaultProfile.articleTitle;
+
   state.skill = await window.gzhApp.loadSkill();
   state.themes = state.skill.themes;
   els.themeSelect.innerHTML = "";
@@ -1431,8 +1828,13 @@ async function init() {
   els.templateCount.textContent = `${state.themes.length} 套`;
   renderSyntaxBar();
   loadState();
-  renderEmojiPanel();
-  if (!els.articleTitle.value) els.articleTitle.value = defaultProfile.articleTitle;
+  renderAssets();
+  setComponentCollapsed(state.componentCollapsed);
+  renderComponentPanel();
+  renderComponentPresets("__default");
+  if (els.emojiGrid) {
+    els.emojiGrid.innerHTML = `<div class="emoji-empty">表情包正在准备中...</div>`;
+  }
   els.coverLabel.value = defaultProfile.coverLabel;
   els.coverSubtitle.value = defaultProfile.coverSubtitle;
   els.authorName.value = defaultProfile.authorName;
@@ -1442,12 +1844,15 @@ async function init() {
   if (!state.themes.some((theme) => theme.id === els.themeSelect.value) && state.themes[0]) {
     els.themeSelect.value = state.themes[0].id;
   }
-  els.source.value = markdownSample;
   await seedDemoEmojiAssets();
   await importLocalMarkdownImages();
   syncArticleTitleFromMarkdown();
   updateThemeMeta();
+  renderComponentPanel();
+  renderComponentPresets("__default");
   renderArticle();
+  saveState();
+  window.setTimeout(renderEmojiPanel, 80);
   updateWechatNetworkState();
   els.status.textContent = "离线模板已加载";
 }
@@ -1458,9 +1863,6 @@ els.emojiTab?.addEventListener("click", () => setMode("emojis"));
 document.getElementById("templatesTab").addEventListener("click", () => setMode("templates"));
 document.getElementById("githubBtn").addEventListener("click", () => {
   window.gzhApp.openExternal("https://github.com/isjiamu/gzh-design-skill");
-});
-document.getElementById("sucaizyBtn").addEventListener("click", () => {
-  window.gzhApp.openExternal("https://sucaizy.com");
 });
 els.settingsToggle?.addEventListener("click", () => {
   setSettingsCollapsed(!state.settingsCollapsed);
@@ -1536,6 +1938,12 @@ els.copyToast?.addEventListener("click", (event) => {
 });
 els.copyToastWechat?.addEventListener("click", () => openWechatTarget("login"));
 els.copyToastMore?.addEventListener("click", () => window.gzhApp.openExternal("https://sucaizy.com"));
+els.clearAssetsCancel?.addEventListener("click", hideClearAssetsDialog);
+els.clearAssetsCancelX?.addEventListener("click", hideClearAssetsDialog);
+els.clearAssetsConfirm?.addEventListener("click", confirmClearAllAssets);
+els.clearAssetsDialog?.addEventListener("click", (event) => {
+  if (event.target === els.clearAssetsDialog) hideClearAssetsDialog();
+});
 els.emojiQuickBtn?.addEventListener("click", (event) => {
   event.stopPropagation();
   toggleEmojiQuickPopover();
@@ -1546,6 +1954,30 @@ document.querySelectorAll(".emoji-mode-btn").forEach((btn) => {
 els.emojiImportBtn?.addEventListener("click", importEmojiImages);
 els.emojiFolderBtn?.addEventListener("click", () => importEmojiImages("folder"));
 els.emojiClearBtn?.addEventListener("click", clearEmojis);
+els.componentResetBtn?.addEventListener("click", () => {
+  setComponentStyle(defaultComponentStyle, "__default");
+  saveState();
+});
+els.componentCollapseBtn?.addEventListener("click", () => {
+  setComponentCollapsed(!state.componentCollapsed);
+  saveState();
+});
+els.saveComponentPresetBtn?.addEventListener("click", saveComponentPreset);
+els.deleteComponentPresetBtn?.addEventListener("click", deleteComponentPreset);
+els.componentPresetSelect?.addEventListener("change", () => {
+  const name = els.componentPresetSelect.value;
+  if (name === "__default") {
+    setComponentStyle(defaultComponentStyle, "__default");
+    saveState();
+    return;
+  }
+  const preset = readComponentPresets().find((item) => item.name === name);
+  if (preset?.style) {
+    if (els.componentPresetName) els.componentPresetName.value = preset.name;
+    setComponentStyle(preset.style, preset.name);
+    saveState();
+  }
+});
 els.profilePresetSelect?.addEventListener("change", () => {
   const name = els.profilePresetSelect.value;
   if (name === "__default") {
@@ -1574,6 +2006,7 @@ window.addEventListener("online", updateWechatNetworkState);
 window.addEventListener("offline", updateWechatNetworkState);
 els.themeSelect.addEventListener("change", () => {
   updateThemeMeta();
+  renderComponentPanel();
   renderArticle();
 });
 function handleArticleEdit(event) {

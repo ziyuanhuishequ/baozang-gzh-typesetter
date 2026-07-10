@@ -202,6 +202,10 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.handle("image:cache", (_event, name, dataUrl) => cacheDataUrlImage(name, dataUrl));
+  ipcMain.handle("image:readFile", (_event, filePath) => {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    return readImageFile(filePath);
+  });
   ipcMain.handle("image:resolveLocal", (_event, src) => resolveRendererImage(src));
   ipcMain.handle("clipboard:readImage", () => {
     const image = clipboard.readImage();
