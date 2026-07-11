@@ -1,8 +1,19 @@
 ﻿const { app, BrowserWindow, ipcMain, clipboard, nativeImage, dialog, Menu, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 
 const isDev = !app.isPackaged;
+const safeUserData = path.join(process.env.APPDATA || app.getPath("home"), "BaozangTypesetter");
+app.setPath("userData", safeUserData);
+app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+app.commandLine.appendSwitch("disable-http-cache");
+
+let mainWindow = null;
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
 
 function getSkillRoot() {
   return isDev
@@ -132,34 +143,34 @@ function parseThemeIndex(markdown) {
   return themes;
 }
 
+let skillDataCache = null;
+
 function loadSkillData() {
+  if (skillDataCache) return skillDataCache;
   const root = getSkillRoot();
   const references = path.join(root, "references");
   const indexText = readText(path.join(references, "theme-index.md"));
-  const themes = parseThemeIndex(indexText).map((theme) => {
-    const filePath = path.join(root, theme.file.replace(/\//g, path.sep));
-    return {
-      ...theme,
-      markdown: fs.existsSync(filePath) ? readText(filePath) : "",
-      fileName: path.basename(filePath)
-    };
-  });
+  const themes = parseThemeIndex(indexText).map((theme) => ({
+    ...theme,
+    fileName: path.basename(theme.file)
+  }));
   const referenceFiles = fs.readdirSync(references)
     .filter((file) => file.endsWith(".md"))
     .sort()
     .map((file) => ({
       name: file,
       path: `references/${file}`,
-      content: readText(path.join(references, file))
+      content: ""
     }));
-  return {
+  skillDataCache = {
     root,
-    skill: readText(path.join(root, "SKILL.md")),
+    skill: "",
     themeIndex: indexText,
-    commonComponents: readText(path.join(references, "common-components.md")),
+    commonComponents: "",
     themes,
     referenceFiles
   };
+  return skillDataCache;
 }
 
 function createWindow() {
@@ -180,6 +191,10 @@ function createWindow() {
     }
   });
 
+  mainWindow = win;
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
+  });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
@@ -189,6 +204,97 @@ function wechatUrl(target = "login") {
     : "https://mp.weixin.qq.com/";
 }
 
+function sanitizeFileName(name) {
+  return String(name || "bao-zang-pai-ban-qi")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 120) || "bao-zang-pai-ban-qi";
+}
+
+function exportDocumentHtml(bodyHtml, title) {
+  const pageTitle = String(title || "宝藏排版器").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${pageTitle}</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f6f7f9; color: #111827; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; }
+  </style>
+</head>
+<body>
+${bodyHtml}
+</body>
+</html>`;
+}
+
+async function saveHtmlLikeDocument(html, title) {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: "????",
+    defaultPath: path.join(app.getPath("documents"), `${sanitizeFileName(title)}.html`),
+    filters: [{ name: "HTML", extensions: ["html"] }]
+  });
+  if (canceled || !filePath) return { canceled: true };
+  fs.writeFileSync(filePath, exportDocumentHtml(html, title), "utf8");
+  return { canceled: false, filePath };
+}
+
+async function savePdfDocument(html, title) {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: "?? PDF",
+    defaultPath: path.join(app.getPath("documents"), `${sanitizeFileName(title)}.pdf`),
+    filters: [{ name: "PDF", extensions: ["pdf"] }]
+  });
+  if (canceled || !filePath) return { canceled: true };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baozang-pdf-"));
+  const tempHtml = path.join(tempDir, `${sanitizeFileName(title)}.html`);
+  fs.writeFileSync(tempHtml, exportDocumentHtml(html, title), "utf8");
+  const win = new BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 1800,
+    backgroundColor: "#ffffff",
+    webPreferences: {
+      sandbox: false,
+      webSecurity: false,
+      allowRunningInsecureContent: true
+    }
+  });
+  try {
+    await win.loadFile(tempHtml);
+    await win.webContents.executeJavaScript(`(async () => {
+      const images = Array.from(document.images || []);
+      await Promise.all(images.map((img) => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise((resolve) => {
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+        });
+      }));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return true;
+    })();`);
+    const pdf = await win.webContents.printToPDF({
+      printBackground: true,
+      pageSize: "A4",
+      marginsType: 1,
+      landscape: false
+    });
+    fs.writeFileSync(filePath, pdf);
+    return { canceled: false, filePath };
+  } finally {
+    if (!win.isDestroyed()) win.close();
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+  }
+}
+if (gotSingleInstanceLock) {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   ipcMain.handle("skill:load", () => loadSkillData());
@@ -270,12 +376,23 @@ app.whenReady().then(() => {
     shell.openExternal(wechatUrl(target));
     return true;
   });
+  ipcMain.handle("document:export", async (_event, type, html, title) => {
+    if (type === "pdf") return savePdfDocument(html, title);
+    return saveHtmlLikeDocument(html, title);
+  });
 
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on("second-instance", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

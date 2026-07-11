@@ -10,6 +10,7 @@
   editedAt: "",
   previewBackground: "none",
   previewFollowFrame: 0,
+  previewShowcaseTimer: 0,
   renderFrame: 0,
   saveTimer: 0,
   syncingTitle: false,
@@ -18,13 +19,22 @@
   syntaxCollapsed: false,
   backgroundColor: "#94a3b8",
   backgroundStrength: 18,
+  coverMeta: {
+    eyebrow: "提示词只是另一种语言",
+    footer: "Agent Skills · 深度拆解",
+    chips: "Prompt · Context · Skills",
+    footerTags: "可复用 · 实战"
+  },
+  coverRightImage: "",
   componentStyle: {
     cover: "classic",
     toc: "cards",
+    tocPalette: "single",
     chapter: "numbered",
     quote: "accent",
     image: "framed",
-    footer: "soft"
+    footer: "soft",
+    history: "cards"
   },
   componentCollapsed: false
 };
@@ -43,6 +53,11 @@ const els = {
   articleTitle: document.getElementById("articleTitle"),
   coverLabel: document.getElementById("coverLabel"),
   coverSubtitle: document.getElementById("coverSubtitle"),
+  coverMetaEyebrow: document.getElementById("coverMetaEyebrow"),
+  coverMetaFooter: document.getElementById("coverMetaFooter"),
+  coverMetaChips: document.getElementById("coverMetaChips"),
+  coverMetaFooterTags: document.getElementById("coverMetaFooterTags"),
+  coverRightImage: document.getElementById("coverRightImage"),
   authorName: document.getElementById("authorName"),
   authorBio: document.getElementById("authorBio"),
   ctaText: document.getElementById("ctaText"),
@@ -92,13 +107,19 @@ const els = {
   profilePresetName: document.getElementById("profilePresetName"),
   saveProfilePresetBtn: document.getElementById("saveProfilePresetBtn"),
   resetProfileBtn: document.getElementById("resetProfileBtn"),
-  deleteProfilePresetBtn: document.getElementById("deleteProfilePresetBtn")
+  deleteProfilePresetBtn: document.getElementById("deleteProfilePresetBtn"),
+  exportMenuBtn: document.getElementById("exportMenuBtn"),
+  exportMenu: document.getElementById("exportMenu")
 };
 
 const defaultProfile = {
   articleTitle: "公众号 Markdown 排版",
   coverLabel: "GZH WORKBENCH",
   coverSubtitle: "离线模板 · 实时预览 · 一键复制到公众号",
+  coverMetaEyebrow: "提示词只是另一种语言",
+  coverMetaFooter: "Agent Skills · 深度拆解",
+  coverMetaChips: "Prompt · Context · Skills",
+  coverMetaFooterTags: "可复用 · 实战",
   authorName: "清喜",
   authorBio: "持续分享 AI 工具、效率软件和实用黑科技",
   ctaText: "如果觉得有用，欢迎点赞、在看、转发给需要的朋友。"
@@ -106,15 +127,27 @@ const defaultProfile = {
 
 const profilePresetKey = "gzh-profile-presets";
 const componentPresetKey = "gzh-component-presets";
+const emojiLibraryKey = "gzh-emoji-library";
 
 const defaultComponentStyle = {
   cover: "classic",
   toc: "cards",
+  tocPalette: "single",
   chapter: "numbered",
   quote: "accent",
   image: "framed",
-  footer: "soft"
+  footer: "soft",
+  history: "cards"
 };
+
+const quickStartThemes = [
+  { id: "moyu-green", name: "摸鱼绿", mainColor: "#059669", underlineColor: "#A7F3D0", scene: "教程、测评、清单、工具盘点", file: "references/theme-moyu-green.md", fileName: "theme-moyu-green.md", label: "MOYU GREEN" },
+  { id: "red-white", name: "红白色系", mainColor: "#DC2626", underlineColor: "#FECACA", scene: "深度分析、观点、力量感话题", file: "references/theme-red-white.md", fileName: "theme-red-white.md", label: "RED WHITE" },
+  { id: "graphite-minimal", name: "石墨极简风", mainColor: "#52525B", underlineColor: "#52525B", scene: "设计、科技评论、专业观点", file: "references/theme-graphite-minimal.md", fileName: "theme-graphite-minimal.md", label: "GRAPHITE" },
+  { id: "zen-whitespace", name: "留白禅意风", mainColor: "#4A5D52", underlineColor: "#B5C8BC", scene: "禅意冥想、极简生活、深度随笔", file: "references/theme-zen-whitespace.md", fileName: "theme-zen-whitespace.md", label: "ZEN" },
+  { id: "moyu-ticket", name: "摸鱼票据风", mainColor: "#059669", underlineColor: "#A7F3D0", scene: "测评、工具对比、创意评测", file: "references/theme-moyu-ticket.md", fileName: "theme-moyu-ticket.md", label: "MOYU TICKET" },
+  { id: "olive-journal", name: "橄榄手记", mainColor: "#1e1f23", underlineColor: "#ed7b2f", scene: "内刊手记、深度评测、案例复盘", file: "references/theme-olive-journal.md", fileName: "theme-olive-journal.md", label: "OLIVE JOURNAL" }
+];
 
 const componentOptions = [
   {
@@ -124,6 +157,9 @@ const componentOptions = [
     options: [
       { id: "classic", name: "经典信息卡", desc: "标题、标签、日期和副标题集中展示，适合大多数文章。" },
       { id: "split", name: "分栏标题卡", desc: "左侧标题，右侧信息标签，更像工具说明页。" },
+      { id: "moyu-cover", name: "摸鱼绿杂志封面", desc: "来自摸鱼绿主题的杂志快讯封面。" },
+      { id: "olive-cover", name: "橄榄手记头图", desc: "来自橄榄手记主题的内刊头图卡。" },
+      { id: "ticket-cover", name: "摸鱼票据封面", desc: "来自摸鱼票据风的门票式封面。" },
       { id: "minimal", name: "极简封面", desc: "减少边框和装饰，适合观点文和轻阅读。" }
     ]
   },
@@ -144,7 +180,9 @@ const componentOptions = [
     options: [
       { id: "numbered", name: "编号章节", desc: "01 / PART 的经典结构，适合教程和清单。" },
       { id: "badge", name: "徽章章节", desc: "彩色标签加标题，标题显示更完整。" },
-      { id: "line", name: "竖线章节", desc: "更简洁，适合深度观点和随笔。" }
+      { id: "line", name: "竖线章节", desc: "更简洁，适合深度观点和随笔。" },
+      { id: "ticket", name: "票据章节", desc: "来自摸鱼票据风的绿色编号与黑色分隔线。" },
+      { id: "olive", name: "橄榄手记章节", desc: "来自橄榄手记的内刊色条章节。" }
     ]
   },
   {
@@ -154,7 +192,9 @@ const componentOptions = [
     options: [
       { id: "accent", name: "主色引用", desc: "左侧主色竖线，稳妥耐看。" },
       { id: "card", name: "浅底卡片", desc: "更像信息提示，适合重点说明。" },
-      { id: "quote", name: "金句居中", desc: "适合放观点、摘要、开篇金句。" }
+      { id: "quote", name: "金句居中", desc: "适合放观点、摘要、开篇金句。" },
+      { id: "olive", name: "橄榄编者按", desc: "来自橄榄手记的内刊式提示。" },
+      { id: "ticket", name: "票据重点卡", desc: "来自摸鱼票据风的硬边框观点卡。" }
     ]
   },
   {
@@ -174,13 +214,83 @@ const componentOptions = [
     options: [
       { id: "soft", name: "柔和结尾", desc: "浅底卡片，适合日常文章。" },
       { id: "brand", name: "品牌强调", desc: "更突出作者署名和互动引导。" },
-      { id: "minimal", name: "极简结尾", desc: "只保留文字和细分割线。" }
+      { id: "minimal", name: "极简结尾", desc: "只保留文字和细分割线。" },
+      { id: "ticket", name: "票据三连结尾", desc: "来自摸鱼票据风的点赞、在看、星标结尾。" },
+      { id: "olive", name: "橄榄行动区", desc: "来自橄榄手记的内刊式结尾行动区。" }
+    ]
+  },
+  {
+    key: "history",
+    title: "历史文章组件",
+    desc: "用于文末推荐往期文章，点击样式会自动补入历史文章示例。",
+    options: [
+      { id: "cards", name: "推荐卡片", desc: "带编号的浅底卡片，适合通用公众号文章。" },
+      { id: "timeline", name: "时间轴列表", desc: "左侧竖线串联文章，适合教程系列。" },
+      { id: "ticket", name: "票据推荐", desc: "硬边框票据感，适合测评和工具盘点。" }
     ]
   }
 ];
 
 function normalizeComponentStyle(style = {}) {
-  return { ...defaultComponentStyle, ...style };
+  const next = { ...defaultComponentStyle, ...style };
+  for (const group of componentOptions) {
+    const allowed = new Set(group.options.map((option) => option.id));
+    if (!allowed.has(next[group.key])) next[group.key] = defaultComponentStyle[group.key];
+  }
+  return next;
+}
+
+const themeComponentPresets = {
+  "moyu-green": { cover: "moyu-cover", toc: "cards", tocPalette: "single", chapter: "numbered", quote: "accent", image: "framed", footer: "soft", history: "cards" },
+  "olive-journal": { cover: "olive-cover", toc: "cards", tocPalette: "single", chapter: "olive", quote: "olive", image: "soft", footer: "olive", history: "timeline" },
+  "red-white": { cover: "split", toc: "list", tocPalette: "single", chapter: "line", quote: "quote", image: "framed", footer: "brand", history: "cards" },
+  "graphite-minimal": { cover: "minimal", toc: "none", tocPalette: "single", chapter: "line", quote: "accent", image: "plain", footer: "minimal", history: "timeline" },
+  "zen-whitespace": { cover: "minimal", toc: "none", tocPalette: "single", chapter: "line", quote: "card", image: "plain", footer: "minimal", history: "timeline" },
+  "moyu-ticket": { cover: "ticket-cover", toc: "none", chapter: "ticket", quote: "ticket", image: "soft", footer: "ticket", history: "ticket" }
+};
+
+function applyThemeComponentPreset(themeId, animate = false) {
+  const preset = themeComponentPresets[themeId] || defaultComponentStyle;
+  state.componentStyle = normalizeComponentStyle({ ...state.componentStyle, ...preset });
+  updateCoverFieldVisibility();
+  renderComponentPanel();
+  renderArticle();
+  if (animate) playPreviewShowcaseScroll();
+  saveState();
+}
+
+function setFieldVisible(input, visible) {
+  const field = input?.closest(".field");
+  if (field) field.hidden = !visible;
+}
+
+function updateCoverFieldVisibility() {
+  const style = state.componentStyle.cover;
+  setFieldVisible(els.coverLabel, true);
+  setFieldVisible(els.coverSubtitle, true);
+  const richCover = ["classic", "moyu-cover", "olive-cover", "ticket-cover"].includes(style);
+  setFieldVisible(els.coverMetaEyebrow, richCover);
+  setFieldVisible(els.coverMetaFooter, richCover);
+  setFieldVisible(els.coverMetaChips, richCover);
+  setFieldVisible(els.coverMetaFooterTags, richCover);
+}
+
+function setThemeOptions(themes, preferredTheme = "") {
+  const current = preferredTheme || els.themeSelect.value;
+  state.themes = themes.length ? themes : quickStartThemes;
+  els.themeSelect.innerHTML = "";
+  for (const theme of state.themes) {
+    const opt = document.createElement("option");
+    opt.value = theme.id;
+    opt.textContent = theme.name;
+    els.themeSelect.appendChild(opt);
+  }
+  if (state.themes.some((theme) => theme.id === current)) {
+    els.themeSelect.value = current;
+  } else if (state.themes[0]) {
+    els.themeSelect.value = state.themes[0].id;
+  }
+  if (els.templateCount) els.templateCount.textContent = `${state.themes.length} 套`;
 }
 
 function readComponentPresets() {
@@ -239,11 +349,12 @@ function deleteComponentPreset() {
   els.status.textContent = `已删除组件预设：${name}`;
 }
 
-function setComponentStyle(style, selectedPreset = "__default") {
+function setComponentStyle(style, selectedPreset = "__default", animate = false) {
   state.componentStyle = normalizeComponentStyle(style);
   renderComponentPanel();
   renderComponentPresets(selectedPreset);
   renderArticle();
+  if (animate) playPreviewShowcaseScroll();
 }
 
 function setComponentCollapsed(collapsed) {
@@ -259,6 +370,12 @@ function profileFields() {
     articleTitle: els.articleTitle.value,
     coverLabel: els.coverLabel.value,
     coverSubtitle: els.coverSubtitle.value,
+    coverMeta: {
+      eyebrow: els.coverMetaEyebrow?.value || "",
+      footer: els.coverMetaFooter?.value || "",
+      chips: els.coverMetaChips?.value || "",
+      footerTags: els.coverMetaFooterTags?.value || ""
+    },
     authorName: els.authorName.value,
     authorBio: els.authorBio.value,
     ctaText: els.ctaText.value
@@ -269,6 +386,10 @@ function applyProfile(profile) {
   els.articleTitle.value = profile.articleTitle || "";
   els.coverLabel.value = profile.coverLabel || "";
   els.coverSubtitle.value = profile.coverSubtitle || "";
+  if (els.coverMetaEyebrow) els.coverMetaEyebrow.value = profile.coverMeta?.eyebrow || "";
+  if (els.coverMetaFooter) els.coverMetaFooter.value = profile.coverMeta?.footer || "";
+  if (els.coverMetaChips) els.coverMetaChips.value = profile.coverMeta?.chips || "";
+  if (els.coverMetaFooterTags) els.coverMetaFooterTags.value = profile.coverMeta?.footerTags || "";
   els.authorName.value = profile.authorName || "";
   els.authorBio.value = profile.authorBio || "";
   els.ctaText.value = profile.ctaText || "";
@@ -367,10 +488,7 @@ function syncArticleTitleFromMarkdown() {
   state.syncingTitle = false;
 }
 
-const markdownSample = `# 公众号 Markdown 排版工作台
-> 这是一款基于 gzh-design-skill 改造的本地离线排版工具，适合把 Markdown 快速转换成可复制到公众号编辑器的富文本。
-
-## 01 这款工具能做什么
+const markdownSample = `## 01 这款工具能做什么
 左侧输入 Markdown，右侧实时预览公众号文章效果。你可以使用 **加粗文字**、*斜体文字*、==高亮重点==、++下划线关键词++，也可以插入链接：[清喜博客](https://sucaizy.com)。
 
 当你移动光标或继续写作时，右侧预览会自动跟随到对应段落，方便一边写文章，一边检查排版效果。
@@ -392,7 +510,16 @@ const markdownSample = `# 公众号 Markdown 排版工作台
 ## 03 图片与代码块
 图片支持直接 Ctrl+V 粘贴，也可以使用 Markdown 图片语法：
 
-![软件预览演示图](./assets/demo-preview.png)
+![](./assets/demo-preview.png)
+
+默认插入图片时，中括号里是空的，所以图片下方不会自动出现文件名说明。如果你希望给图片加一行描述，只需要在中括号里写文字：
+
+\`\`\`markdown
+![这里写图片描述](图片地址)
+![](图片地址)
+\`\`\`
+
+第一种会在图片下方显示描述，第二种只显示图片本身，更适合截图、封面图和表情包。
 
 代码块适合放命令、Prompt 或配置示例：
 
@@ -452,7 +579,7 @@ const syntaxActions = [
   { label: "引用", mark: ">", shortcut: "Ctrl+Shift+Q", run: () => insertLine("> 这里是一句引用或金句") },
   { label: "无序列表", mark: "-", shortcut: "Ctrl+Shift+8", run: () => insertLine("- 列表项") },
   { label: "有序列表", mark: "1.", shortcut: "Ctrl+Shift+7", run: () => insertLine("1. 第一步") },
-  { label: "图片", mark: "IMG", shortcut: "Ctrl+Shift+I", run: () => insertText("\n![图片说明](https://example.com/image.png)\n", { selectStart: 3, selectEnd: 7 }) },
+  { label: "图片", mark: "IMG", shortcut: "Ctrl+Shift+I", run: () => insertText("\n![](https://example.com/image.png)\n", { selectStart: 5, selectEnd: 34 }) },
   { label: "代码块", mark: "</>", shortcut: "Ctrl+`", run: () => insertText("\n```bash\nnpm start\n```\n", { selectStart: 9, selectEnd: 18 }) },
   { label: "分割线", mark: "---", shortcut: "Ctrl+Shift+-", run: () => insertText("\n---\n") }
 ];
@@ -602,7 +729,7 @@ function parseBlocks(text) {
     } else if (/^!\[[^\]]*\]\([^)]+\)/.test(t)) {
       flush(lineNo - 1);
       const m = t.match(/^!\[([^\]]*)\]\(([^)]+)\)(?:\{(\d{1,3})%\})?/);
-      blocks.push({ type: "image", alt: m[1], src: m[2], scale: Math.max(10, Math.min(100, Number(m[3]) || 100)), startLine: lineNo, endLine: lineNo });
+      blocks.push({ type: "image", alt: m[1], src: m[2], scale: m[3] ? Math.max(10, Math.min(100, Number(m[3]))) : 0, startLine: lineNo, endLine: lineNo });
     } else if (/^[-*]\s+/.test(t) || /^\d+[.)、]\s+/.test(t)) {
       flush(lineNo - 1);
       blocks.push({ type: "li", text: t.replace(/^([-*]|\d+[.)、])\s+/, ""), startLine: lineNo, endLine: lineNo });
@@ -645,6 +772,7 @@ async function hydrateEmojiImage(emoji) {
     emoji.fileUrl = image.fileUrl || emoji.fileUrl || "";
     emoji.filePath = image.filePath || emoji.filePath || "";
     emoji.mime = image.mime || emoji.mime || "";
+    saveEmojiLibrary();
     saveState();
   } catch (error) {
     console.warn("hydrate emoji failed", error);
@@ -709,6 +837,44 @@ function setEmojiInsertMode(mode = "tiny", persist = true) {
   if (persist) saveState();
 }
 
+function lightweightEmoji(emoji) {
+  return {
+    id: emoji.id,
+    name: emoji.name,
+    dataUrl: "",
+    fileUrl: emoji.fileUrl || "",
+    filePath: emoji.filePath || "",
+    mime: emoji.mime || ""
+  };
+}
+
+function saveEmojiLibrary() {
+  localStorage.setItem(emojiLibraryKey, JSON.stringify(state.emojis.map(lightweightEmoji)));
+}
+
+function loadEmojiLibrary() {
+  try {
+    const saved = localStorage.getItem(emojiLibraryKey);
+    if (saved) {
+      const data = JSON.parse(saved);
+      state.emojis = Array.isArray(data) ? data.map(lightweightEmoji) : [];
+      return true;
+    }
+    const legacy = localStorage.getItem("gzh-electron-state") || "";
+    if (legacy && legacy.length < 2_000_000) {
+      const data = JSON.parse(legacy);
+      if (Array.isArray(data.emojis)) {
+        state.emojis = data.emojis.map(lightweightEmoji);
+        saveEmojiLibrary();
+        return true;
+      }
+    }
+  } catch (error) {
+    console.warn("load emoji library failed", error);
+  }
+  return false;
+}
+
 function showEmojiQuickPopover() {
   renderEmojiQuickPanel();
   els.emojiQuickPopover?.classList.add("show");
@@ -745,6 +911,7 @@ async function importEmojiImages(source = "files") {
     existing.add(key);
   }
   renderEmojiPanel();
+  saveEmojiLibrary();
   saveState();
   els.status.textContent = `已导入 ${images.length} 个表情包`;
 }
@@ -770,6 +937,7 @@ async function insertEmoji(emoji, mode) {
 function deleteEmoji(id) {
   state.emojis = state.emojis.filter((emoji) => emoji.id !== id);
   renderEmojiPanel();
+  saveEmojiLibrary();
   saveState();
   els.status.textContent = "表情包已删除";
 }
@@ -777,6 +945,7 @@ function deleteEmoji(id) {
 function clearEmojis() {
   state.emojis = [];
   renderEmojiPanel();
+  saveEmojiLibrary();
   saveState();
   els.status.textContent = "已清空表情包列表";
 }
@@ -845,12 +1014,12 @@ async function importLocalMarkdownImages() {
         next += raw;
         continue;
       }
-      const name = alt || image.name || "本地图片.png";
+      const name = image.name || alt || "本地图片.png";
       const id = createAsset(name, image.dataUrl, image.fileUrl || "", image.filePath || "");
       if (/demo-preview/i.test(src) || /demo-preview/i.test(name)) {
         state.assets[id].demoAsset = true;
       }
-      next += `![${name}](asset://${id})`;
+      next += `![${alt || ""}](asset://${id})`;
       changed = true;
     } catch (error) {
       console.warn("resolve local image failed", error);
@@ -909,9 +1078,9 @@ function renderAssets() {
     card.setAttribute("role", "button");
     card.title = "点击在光标处再次插入该图片";
     card.innerHTML = `<img alt="" src="${esc(assetSrc)}"><span>${esc(asset.name)}</span><button class="asset-remove" type="button" title="删除图片">×</button>`;
-    card.addEventListener("click", () => insertLine(`![${asset.name}](asset://${asset.id})`));
+    card.addEventListener("click", () => insertLine(`![](asset://${asset.id})`));
     card.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") insertLine(`![${asset.name}](asset://${asset.id})`);
+      if (event.key === "Enter" || event.key === " ") insertLine(`![](asset://${asset.id})`);
     });
     card.querySelector(".asset-remove").addEventListener("click", (event) => {
       event.stopPropagation();
@@ -978,9 +1147,92 @@ function enLabel(text) {
 function renderCover(title, subtitle, theme) {
   const line1 = title.length > 16 ? title.slice(0, 16) : title;
   const line2 = title.length > 16 ? title.slice(16, 34) : "";
-  const label = els.coverLabel.value.trim() || theme.label;
+  const label = els.coverLabel ? els.coverLabel.value.trim() : theme.label;
   const editDate = state.editedAt || todayStamp();
+  const meta = {
+    eyebrow: els.coverMetaEyebrow ? els.coverMetaEyebrow.value.trim() : (state.coverMeta.eyebrow || ""),
+    footer: els.coverMetaFooter ? els.coverMetaFooter.value.trim() : (state.coverMeta.footer || ""),
+    chips: els.coverMetaChips ? els.coverMetaChips.value.trim() : (state.coverMeta.chips || ""),
+    footerTags: els.coverMetaFooterTags ? els.coverMetaFooterTags.value.trim() : (state.coverMeta.footerTags || "")
+  };
+  state.coverMeta = meta;
+  const rightImage = state.coverRightImage ? `<img data-cover-right-image src="${esc(state.coverRightImage)}" alt="头图图片" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:14px;cursor:pointer;" title="点击更换图片">` : `<button data-cover-right-image type="button" style="width:100%;height:100%;border:1px dashed ${theme.underlineColor};border-radius:14px;background:linear-gradient(135deg,${themeSoft(theme)},#FFFFFF);color:${theme.mainColor};font-size:12px;font-weight:850;line-height:1.35;cursor:pointer;padding:0 8px;">上传<br>图片</button>`;
   const style = state.componentStyle.cover;
+  if (style === "moyu-cover") {
+    const chips = meta.footerTags.split(/[·•｜|/，,\s]+/).filter(Boolean).slice(0, 2);
+    return `<section data-profile-target="cover" style="margin:0 0 32px;background:#fff;border:1.5px solid rgba(5,150,105,0.15);border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06);width:100%;">
+  <section style="padding:32px 28px 28px;">
+    <section style="display:flex;align-items:center;gap:8px;margin-bottom:28px;">
+      <span style="width:6px;height:6px;background:${theme.mainColor};border-radius:50%;"><span leaf=""><br></span></span>
+      <span style="font-size:11px;font-weight:700;letter-spacing:3px;color:${theme.mainColor};">${leaf(label)}</span>
+      <section style="flex:1;height:1px;overflow:hidden;background:linear-gradient(to right,rgba(5,150,105,0.12),transparent);"><span leaf=""><br></span></section>
+      <span style="font-size:10px;color:#D1D5DB;font-weight:600;">${leaf(editDate)}</span>
+    </section>
+    <section>
+      ${meta.eyebrow ? `<p style="font-size:15px;color:#D1D5DB;margin:0 0 6px;text-decoration:line-through;letter-spacing:0.5px;">${leaf(meta.eyebrow)}</p>` : ""}
+      <p style="font-size:24px;font-weight:900;color:#111827;margin:0;line-height:1.08;letter-spacing:-1px;">${leaf(line1)}</p>
+      ${line2 ? `<p style="font-size:24px;font-weight:900;color:${theme.mainColor};margin:0 0 16px;line-height:1.08;letter-spacing:-1px;">${leaf(line2)}</p>` : ""}
+      <section style="width:48px;height:3px;background:linear-gradient(to right,${theme.mainColor},#34D399);border-radius:2px;margin-bottom:12px;"><span leaf=""><br></span></section>
+      <p style="font-size:13px;color:#9CA3AF;margin:0;line-height:1.7;letter-spacing:0.5px;">${leaf(subtitle)}</p>
+    </section>
+  </section>
+  <section style="background:linear-gradient(135deg,${theme.mainColor},#10B981);padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <p style="font-size:12px;color:rgba(255,255,255,0.9);margin:0;font-weight:600;letter-spacing:0.5px;">${leaf(meta.footer)}</p>
+    <section style="display:flex;gap:4px;flex-shrink:0;">${chips.map((tag) => `<span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:3px;font-size:8px;color:#fff;font-weight:600;">${leaf(tag)}</span>`).join("")}</section>
+  </section>
+</section>`;
+  }
+  if (style === "olive-cover") {
+    const oliveImage = state.coverRightImage
+      ? `<img data-cover-right-image src="${esc(state.coverRightImage)}" alt="头图图片" style="width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;" title="点击更换图片">`
+      : `<button data-cover-right-image type="button" style="width:100%;height:100%;border:0;background:#fffaf1;color:#ed7b2f;font-size:12px;font-weight:900;cursor:pointer;">上传图片</button>`;
+    return `<section data-profile-target="cover" style="margin:0 0 32px;background:#f6f2ea;border:1px solid #23251d;overflow:hidden;">
+  <section style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #23251d;padding:10px 14px;">
+    <span style="font-size:11px;font-weight:900;color:#23251d;letter-spacing:2px;">${leaf(label || "FIELD NOTES")}</span>
+    <span style="font-size:10px;color:#6f6a5f;">${leaf(editDate)}</span>
+  </section>
+  <section style="display:flex;gap:18px;padding:22px 18px;align-items:stretch;">
+    <section style="flex:1;min-width:0;">
+      ${meta.eyebrow ? `<p style="margin:0 0 9px;font-size:12px;color:#ed7b2f;font-weight:800;letter-spacing:1px;">${leaf(meta.eyebrow)}</p>` : ""}
+      <p style="margin:0;font-size:24px;font-weight:900;line-height:1.16;color:#23251d;">${leaf(line1)}</p>
+      ${line2 ? `<p style="margin:0 0 12px;font-size:24px;font-weight:900;line-height:1.16;color:#ed7b2f;">${leaf(line2)}</p>` : ""}
+      <p style="margin:12px 0 0;font-size:13px;color:#5e5a51;line-height:1.8;">${leaf(subtitle)}</p>
+    </section>
+    <section style="width:88px;flex-shrink:0;background:#fffaf1;border:1px solid #23251d;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+      ${oliveImage}
+    </section>
+  </section>
+  ${meta.footer ? `<section style="background:#23251d;color:#f6f2ea;padding:12px 18px;font-size:12px;line-height:1.7;">${leaf(meta.footer)}</section>` : ""}
+</section>`;
+  }
+  if (style === "ticket-cover") {
+    const tags = meta.footerTags.split(/[·•｜|/，,\s]+/).filter(Boolean).slice(0, 3);
+    const author = els.authorName.value.trim();
+    const bio = els.authorBio.value.trim();
+    return `<section data-profile-target="cover" style="background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;margin-bottom:32px;">
+  <section style="background:${theme.mainColor};padding:12px 20px;display:flex;justify-content:space-between;align-items:center;">
+    <section style="color:#fffef8;font-size:11px;letter-spacing:4px;font-weight:600;">${leaf(label || "DEEP TOOL REVIEW")}</section>
+    <section style="color:#fffef8;font-size:11px;letter-spacing:2px;">${leaf("★★★★★")}</section>
+  </section>
+  <section style="display:flex;">
+    <section style="flex:1;padding:24px 20px;border-right:2px dashed ${theme.underlineColor};">
+      <section style="font-size:24px;font-weight:900;color:#1a1a1a;letter-spacing:0.5px;margin-bottom:4px;text-shadow:0.5px 0 0 #1a1a1a;">${leaf(title)}</section>
+      <section style="font-size:14px;color:#666;letter-spacing:1px;margin-bottom:20px;">${leaf(subtitle)}</section>
+      <section style="border-top:1px dashed ${theme.underlineColor};margin-bottom:16px;"><span leaf=""><br></span></section>
+      ${(author || bio) ? `<section style="margin-bottom:16px;"><section style="font-size:15px;color:#1a1a1a;font-weight:700;">${leaf(author || "{{作者名}}")}</section><section style="font-size:12px;color:#888;">${leaf(bio || "{{简介}}")}</section></section>` : ""}
+      ${meta.footer ? `<section style="font-size:13px;color:#555;line-height:1.8;padding:12px;background:#F0FDF4;border:1px solid ${theme.underlineColor};">${leaf(meta.footer)}</section>` : ""}
+      ${tags.length ? `<section style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">${tags.map((tag) => `<section style="font-size:10px;color:${theme.mainColor};border:1px solid ${theme.mainColor};padding:4px 10px;">${leaf("#" + tag)}</section>`).join("")}</section>` : ""}
+    </section>
+    <section style="width:48px;padding:14px 4px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#F0FDF4;">
+      <section style="text-align:center;"><section style="font-size:7px;color:#999;letter-spacing:1px;">${leaf("NO.")}</section><section style="font-size:18px;font-weight:900;color:${theme.mainColor};">${leaf("001")}</section></section>
+      <section style="writing-mode:vertical-rl;font-size:9px;color:#888;letter-spacing:2px;">${leaf(meta.eyebrow || "工具评测")}</section>
+      <section style="text-align:center;"><section style="font-size:7px;color:#999;letter-spacing:1px;">${leaf("GRADE")}</section><section style="font-size:14px;font-weight:900;color:${theme.mainColor};">${leaf("S")}</section></section>
+    </section>
+  </section>
+  <section style="display:flex;justify-content:space-between;align-items:center;padding:0 8px;"><section style="flex:1;border-top:2px dashed ${theme.underlineColor};"><span leaf=""><br></span></section><section style="padding:0 8px;font-size:10px;color:${theme.underlineColor};">✂</section><section style="flex:1;border-top:2px dashed ${theme.underlineColor};"><span leaf=""><br></span></section></section>
+  <section style="padding:10px 20px;display:flex;justify-content:space-between;align-items:center;"><section style="font-size:10px;color:#999;letter-spacing:1px;">${leaf("VALID FOR ONE READ")}</section><section style="font-size:10px;color:#999;letter-spacing:1px;">${leaf("ADMIT ONE")}</section></section>
+</section>`;
+  }
   if (style === "split") {
     return `<section data-profile-target="cover" style="margin:0 0 32px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:18px;padding:26px 24px;box-shadow:0 8px 26px rgba(15,23,42,0.07);">
   <section style="display:flex;align-items:stretch;gap:18px;">
@@ -990,8 +1242,10 @@ function renderCover(title, subtitle, theme) {
       ${line2 ? `<p style="font-size:25px;font-weight:900;color:${theme.mainColor};margin:0 0 12px;line-height:1.16;">${leaf(line2)}</p>` : ""}
       <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
     </section>
-    <section style="width:92px;flex-shrink:0;border-left:1px solid ${theme.underlineColor};padding-left:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;">
-      <span style="display:inline-block;width:34px;height:34px;border-radius:12px;background:${theme.mainColor};color:#fff;text-align:center;line-height:34px;font-size:14px;font-weight:900;"><span leaf="">G</span></span>
+    <section style="width:96px;flex-shrink:0;border-left:1px solid ${theme.underlineColor};padding-left:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;">
+      <section style="width:72px;height:72px;border-radius:16px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(15,23,42,0.08);">
+        ${rightImage}
+      </section>
       <span style="font-size:11px;color:#94A3B8;font-weight:800;line-height:1.5;">${leaf(editDate)}</span>
     </section>
   </section>
@@ -1004,18 +1258,37 @@ function renderCover(title, subtitle, theme) {
   <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
 </section>`;
   }
-  return `<section data-profile-target="cover" style="margin:0 0 32px;background:#fff;border:1.5px solid ${theme.underlineColor};border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06);width:100%;">
-  <section style="padding:32px 28px 28px;">
-    <section style="display:flex;align-items:center;gap:8px;margin-bottom:28px;">
-      <span style="width:6px;height:6px;background:${theme.mainColor};border-radius:50%;"><span leaf=""><br></span></span>
-      <span style="font-size:11px;font-weight:700;letter-spacing:3px;color:${theme.mainColor};">${leaf(label)}</span>
-      <section style="flex:1;height:1px;overflow:hidden;background:linear-gradient(to right,${theme.underlineColor},transparent);"><span leaf=""><br></span></section>
+  const coverBits = meta.chips
+    .split(/[·•｜|/，,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  return `<section data-profile-target="cover" style="margin:0 0 32px;background:#fff;border:1px solid rgba(16,185,129,0.14);border-radius:20px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);width:100%;">
+  <section style="padding:20px 20px 0;">
+    <section style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <span style="width:8px;height:8px;background:${theme.mainColor};border-radius:999px;"><span leaf=""><br></span></span>
+      <span style="font-size:11px;font-weight:900;letter-spacing:3px;color:${theme.mainColor};">${leaf(label)}</span>
+      <section style="flex:1;height:1px;overflow:hidden;background:linear-gradient(to right,rgba(5,150,105,0.14),transparent);"><span leaf=""><br></span></section>
       <span style="font-size:10px;color:#D1D5DB;font-weight:600;">${leaf(editDate)}</span>
     </section>
-    <p style="font-size:26px;font-weight:900;color:#0F172A;margin:0;line-height:1.12;letter-spacing:0.1px;">${leaf(line1)}</p>
-    ${line2 ? `<p style="font-size:26px;font-weight:900;color:${theme.mainColor};margin:0 0 16px;line-height:1.12;letter-spacing:0.1px;">${leaf(line2)}</p>` : ""}
-    <section style="width:48px;height:3px;background:linear-gradient(to right,${theme.mainColor},${theme.underlineColor});border-radius:2px;margin-bottom:12px;"><span leaf=""><br></span></section>
-    <p style="font-size:13px;color:#9CA3AF;margin:0;line-height:1.7;letter-spacing:0.5px;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
+    <section style="padding:2px 0 18px;">
+      <section style="min-width:0;">
+        ${meta.eyebrow ? `<p style="font-size:14px;color:#CBD5E1;margin:0 0 10px;font-weight:700;letter-spacing:0.5px;">${leaf(meta.eyebrow)}</p>` : ""}
+        <p style="font-size:26px;font-weight:900;color:#111827;margin:0;line-height:1.06;letter-spacing:-1px;">${leaf(line1)}</p>
+        ${line2 ? `<p style="font-size:26px;font-weight:900;color:${theme.mainColor};margin:0 0 14px;line-height:1.06;letter-spacing:-1px;">${leaf(line2)}</p>` : ""}
+        <section style="width:56px;height:3px;background:linear-gradient(to right,${theme.mainColor},${theme.underlineColor});border-radius:999px;margin-bottom:14px;"><span leaf=""><br></span></section>
+        <p style="font-size:13px;color:#94A3B8;margin:0 0 12px;line-height:1.7;">${leaf(subtitle || "Prompt · Context · Skills · 渐进式策略 · 能力包")}</p>
+        ${coverBits.length ? `<section style="display:flex;flex-wrap:wrap;gap:8px 10px;">
+          ${coverBits.map((bit, index) => `<span style="display:inline-block;padding:6px 10px;border-radius:999px;background:${index === 0 ? themeSoft(theme) : "#F8FAFC"};color:${index === 0 ? theme.mainColor : "#64748B"};border:1px solid ${index === 0 ? "rgba(5,150,105,0.14)" : "#E5E7EB"};font-size:11px;font-weight:800;line-height:1;">${leaf(bit)}</span>`).join("")}
+        </section>` : ""}
+      </section>
+    </section>
+  </section>
+  <section style="background:linear-gradient(135deg,${theme.mainColor},${themeDeep(theme)});padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <p style="font-size:12px;color:rgba(255,255,255,0.92);margin:0;font-weight:800;letter-spacing:0.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${leaf(meta.footer)}</p>
+    <section style="display:flex;gap:6px;flex-shrink:0;">
+      ${meta.footerTags.split(/[·•｜|/，,\s]+/).filter(Boolean).slice(0, 2).map((tag) => `<span style="background:rgba(255,255,255,0.18);padding:2px 7px;border-radius:999px;font-size:8px;color:#fff;font-weight:700;line-height:1;">${leaf(tag)}</span>`).join("")}
+    </section>
   </section>
 </section>`;
 }
@@ -1024,7 +1297,7 @@ function renderToc(headings, theme) {
   if (headings.length < 2) return "";
   if (state.componentStyle.toc === "none") return "";
   if (state.componentStyle.toc === "list") {
-    const items = headings.slice(0, 6).map((h, i) => `<section style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+    const items = headings.map((h, i) => `<section style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
   <span style="display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:${themeSoft(theme)};color:${theme.mainColor};font-size:11px;font-weight:900;">${leaf(String(i + 1).padStart(2, "0"))}</span>
   <section style="flex:1;border-bottom:1px solid #EEF2F7;padding-bottom:10px;">
     <p style="margin:0;font-size:14px;font-weight:850;color:#111827;line-height:1.55;">${leaf(h)}</p>
@@ -1044,18 +1317,22 @@ function renderToc(headings, theme) {
     ["#F59E0B", "#B45309"],
     ["#EF4444", "#B91C1C"]
   ];
-  const cards = headings.slice(0, 6).map((h, i) => {
-    const [from, to] = palette[i % palette.length];
-    const bg = `background:linear-gradient(135deg,${from},${to});box-shadow:0 4px 12px rgba(15,23,42,0.10);`;
+  const tocHeadings = headings;
+  const cards = tocHeadings.map((h, i) => {
+    const pair = state.componentStyle.tocPalette === "all" ? palette[i % palette.length] : (i === 0 ? palette[0] : ["#FFFFFF", "#FFFFFF"]);
+    const [from, to] = pair;
+    const bg = i === 0 || state.componentStyle.tocPalette === "all"
+      ? `background:linear-gradient(135deg,${from},${to});box-shadow:0 4px 12px rgba(15,23,42,0.10);`
+      : "background:#FFFFFF;box-shadow:0 2px 8px rgba(15,23,42,0.06);border:1px solid #E5E7EB;";
     return `<section style="display:inline-block;white-space:normal;vertical-align:top;width:132px;height:106px;${bg}border-radius:12px;padding:12px;margin-right:8px;overflow:hidden;">
-  <p style="font-size:9px;font-weight:700;color:rgba(255,255,255,0.72);letter-spacing:1px;margin:0 0 7px;">${leaf("PART " + String(i + 1).padStart(2, "0"))}</p>
-  <p style="font-size:13px;font-weight:850;color:#fff;margin:0 0 5px;line-height:1.45;white-space:normal;">${leaf(h)}</p>
-  <p style="font-size:10px;color:rgba(255,255,255,0.72);margin:0;line-height:1.2;">${leaf(enLabel(h))}</p>
+  <p style="font-size:9px;font-weight:700;letter-spacing:1px;margin:0 0 7px;color:${i === 0 || state.componentStyle.tocPalette === "all" ? "rgba(255,255,255,0.72)" : "#9CA3AF"};">${leaf("PART " + String(i + 1).padStart(2, "0"))}</p>
+  <p style="font-size:13px;font-weight:850;margin:0 0 5px;line-height:1.45;white-space:normal;color:${i === 0 || state.componentStyle.tocPalette === "all" ? "#fff" : "#111827"};">${leaf(h)}</p>
+  <p style="font-size:10px;margin:0;line-height:1.2;color:${i === 0 || state.componentStyle.tocPalette === "all" ? "rgba(255,255,255,0.72)" : "#9CA3AF"};">${leaf(enLabel(h))}</p>
 </section>`;
   }).join("");
   return `<section style="margin:0 20px 32px;">
   <section style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-    <p style="font-size:10px;color:#9CA3AF;margin:0;text-transform:uppercase;letter-spacing:2px;font-weight:600;">${leaf(headings.length + " PARTS")}</p>
+    <p style="font-size:10px;color:#9CA3AF;margin:0;text-transform:uppercase;letter-spacing:2px;font-weight:600;">${leaf(tocHeadings.length + " PARTS")}</p>
     <p style="font-size:10px;color:#9CA3AF;margin:0;">${leaf("横向滑动")}</p>
   </section>
   <section style="overflow-x:scroll;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:8px;">${cards}</section>
@@ -1065,6 +1342,26 @@ function renderToc(headings, theme) {
 function renderChapterTitle(block, chapterNo, theme) {
   const no = /最后|总结|结语/.test(block.text) ? "///" : String(chapterNo).padStart(2, "0");
   const part = no === "///" ? "LAST" : "PART";
+  if (state.componentStyle.chapter === "ticket") {
+    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+  <section style="display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #1a1a1a;">
+    <section style="background:${theme.mainColor};color:#fff;font-size:12px;font-weight:800;padding:6px 12px;letter-spacing:2px;">${leaf(no)}</section>
+    <section style="font-size:18px;font-weight:800;color:#1a1a1a;letter-spacing:1px;">${leaf(block.text)}</section>
+    <section style="font-size:12px;color:#888;">${leaf("/ " + enLabel(block.text))}</section>
+  </section>
+`;
+  }
+  if (state.componentStyle.chapter === "olive") {
+    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+  <section style="border:1px solid #23251d;background:#f6f2ea;margin-bottom:24px;">
+    <section style="display:inline-block;background:#23251d;color:#f6f2ea;padding:5px 10px;font-size:11px;font-weight:900;letter-spacing:1.5px;">${leaf(`${part} ${no}`)}</section>
+    <section style="padding:12px 14px;">
+      <p style="margin:0;font-size:20px;font-weight:900;color:#23251d;line-height:1.45;">${leaf(block.text)}</p>
+      <p style="margin:3px 0 0;font-size:11px;font-weight:800;color:#ed7b2f;letter-spacing:1.5px;">${leaf(enLabel(block.text))}</p>
+    </section>
+  </section>
+`;
+  }
   if (state.componentStyle.chapter === "badge") {
     return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
   <section style="margin-bottom:24px;">
@@ -1094,6 +1391,17 @@ function renderChapterTitle(block, chapterNo, theme) {
 
 function renderQuoteBlock(block, theme) {
   const text = block.text.replace(/^「|」$/g, "");
+  if (state.componentStyle.quote === "olive") {
+    return `<section${previewMark(block)} style="margin:0 20px 24px;background:#f6f2ea;border:1px solid #23251d;padding:16px 18px;">
+  <p style="margin:0 0 6px;font-size:11px;font-weight:900;color:#ed7b2f;letter-spacing:1.8px;">${leaf("EDITOR NOTE")}</p>
+  <p style="font-size:15px;font-weight:800;color:#23251d;margin:0;line-height:1.85;">${leaf(text)}</p>
+</section>`;
+  }
+  if (state.componentStyle.quote === "ticket") {
+    return `<section${previewMark(block)} style="margin:0 20px 24px;background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;padding:16px 18px;">
+  <p style="margin:0;font-size:15px;font-weight:900;color:#1a1a1a;line-height:1.85;">${leaf(text)}</p>
+</section>`;
+  }
   if (state.componentStyle.quote === "card") {
     return `<section${previewMark(block)} style="margin:0 20px 24px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;box-shadow:0 6px 18px rgba(15,23,42,0.05);"><p style="font-size:15px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.85;">${leaf(text)}</p></section>`;
   }
@@ -1108,21 +1416,38 @@ function renderImageBlock(block, theme, chapterNo) {
   const imageAsset = block.src.startsWith("asset://") ? state.assets[block.src.replace("asset://", "")] : null;
   const imageMargin = chapterNo ? "0 0 8px" : "0 20px 8px";
   const captionMargin = chapterNo ? "0 0 24px" : "0 20px 24px";
-  const imageWidth = `${block.scale || 100}%`;
+  const scaleValue = Number(block.scale) || 100;
+  const compactFrame = !Number.isNaN(scaleValue) && scaleValue < 100;
+  const imageStyle = block.scale
+    ? `width:${block.scale}%;max-width:100%;height:auto;display:block;margin:0 auto;`
+    : "max-width:100%;height:auto;display:block;margin:0 auto;";
   const plain = imageAsset?.emojiAsset || imageAsset?.emojiPlain || state.componentStyle.image === "plain";
+  const shellStyle = compactFrame
+    ? `display:inline-block;width:fit-content;max-width:100%;`
+    : "display:block;width:100%;";
   let html = "";
   if (plain) {
-    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;border:0;box-shadow:none;"></span></section>`;
+    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="${imageStyle}border:0;box-shadow:none;"></span></section>`;
   } else if (state.componentStyle.image === "soft") {
-    html += `<section${previewMark(block)} style="background:${themeSoft(theme)};border-radius:16px;padding:8px;border:1px solid ${theme.underlineColor};box-shadow:0 8px 18px rgba(15,23,42,0.06);margin:${imageMargin};"><section style="margin:0;border-radius:12px;overflow:hidden;text-align:center;background:#fff;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;"></span></section></section>`;
+    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><section style="background:${themeSoft(theme)};border-radius:16px;padding:6px;border:1px solid ${theme.underlineColor};box-shadow:0 8px 18px rgba(15,23,42,0.06);${shellStyle}"><section style="margin:0;border-radius:12px;overflow:hidden;text-align:center;background:#fff;"><span leaf=""><img src="${esc(imageSrc)}" style="${imageStyle}"></span></section></section></section>`;
   } else {
-    html += `<section${previewMark(block)} style="background:#FFF;border-radius:12px;padding:3px;border:1px solid #E5E7EB;box-shadow:0 4px 12px -2px rgba(0,0,0,0.08);margin:${imageMargin};"><section style="margin:0;border-radius:8px;overflow:hidden;text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="width:${imageWidth};max-width:100%;height:auto;display:block;margin:0 auto;"></span></section></section>`;
+    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><section style="background:#FFF;border-radius:12px;padding:3px;border:1px solid #E5E7EB;box-shadow:0 4px 12px -2px rgba(0,0,0,0.08);${shellStyle}"><section style="margin:0;border-radius:8px;overflow:hidden;text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="${imageStyle}"></span></section></section></section>`;
   }
   if (block.alt && !plain) html += `<p style="font-size:12px;color:#9CA3AF;text-align:center;margin:${captionMargin};">${leaf("— " + block.alt)}</p>`;
   return html;
 }
 
 function renderAuthorBlock(authorText, theme) {
+  if (state.componentStyle.footer === "ticket") {
+    return `<section data-profile-target="author" style="margin:30px 20px 14px;">
+  <p style="font-size:14px;color:#555;line-height:1.9;margin:0;text-align:justify;">${leaf(authorText)}</p>
+</section>`;
+  }
+  if (state.componentStyle.footer === "olive") {
+    return `<section data-profile-target="author" style="margin:30px 20px 14px;border-top:1px solid #23251d;border-bottom:1px solid #23251d;padding:14px 0;">
+  <p style="font-size:14px;color:#23251d;line-height:1.9;margin:0;text-align:justify;font-weight:800;">${leaf(authorText)}</p>
+</section>`;
+  }
   if (state.componentStyle.footer === "brand") {
     return `<section data-profile-target="author" style="margin:30px 20px 14px;background:${theme.mainColor};border-radius:16px;padding:18px 20px;box-shadow:0 10px 24px rgba(15,23,42,0.12);">
   <p style="margin:0 0 6px;font-size:11px;font-weight:900;letter-spacing:1.6px;color:rgba(255,255,255,0.72);">${leaf("ABOUT AUTHOR")}</p>
@@ -1141,6 +1466,23 @@ function renderAuthorBlock(authorText, theme) {
 }
 
 function renderCtaBlock(cta, theme) {
+  if (state.componentStyle.footer === "ticket") {
+    return `<section data-profile-target="cta" style="padding:0 0 32px;">
+  <section style="background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;padding:24px 20px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#1a1a1a;margin:0 0 20px;line-height:1.6;">${leaf(cta)}</p>
+    <section style="display:flex;justify-content:center;gap:24px;margin-bottom:16px;">
+      ${[["♡","点赞","#555"],["◉","在看","#555"],["★","星标",theme.mainColor]].map(([icon, text, color]) => `<section style="text-align:center;color:${color};"><section style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;background:#fff;border:${text === "星标" ? "2px solid " + theme.mainColor : "1px solid #1a1a1a"};">${leaf(icon)}</section><span style="font-size:10px;font-weight:600;">${leaf(text)}</span></section>`).join("")}
+    </section>
+    <section style="border-top:1px dashed #ccc;padding-top:12px;"><p style="font-size:10px;color:#999;letter-spacing:2px;margin:0;">${leaf("THANKS FOR READING")}</p></section>
+  </section>
+</section>`;
+  }
+  if (state.componentStyle.footer === "olive") {
+    return `<section data-profile-target="cta" style="margin:0 20px 28px;background:#23251d;color:#f6f2ea;padding:22px 20px;text-align:center;">
+  <p style="font-size:14px;font-weight:900;margin:0 0 10px;line-height:1.8;">${leaf(cta)}</p>
+  <p style="font-size:10px;color:#ed7b2f;letter-spacing:2px;margin:0;">${leaf("KEEP READING · KEEP MAKING")}</p>
+</section>`;
+  }
   if (state.componentStyle.footer === "brand") {
     return `<section data-profile-target="cta" style="background:linear-gradient(135deg,${theme.mainColor},${themeDeep(theme)});border-radius:18px;padding:30px 22px;text-align:center;box-shadow:0 12px 28px rgba(15,23,42,0.16);margin:0 20px 24px;"><p style="font-size:14px;font-weight:900;color:#FFFFFF;margin:0 0 14px;line-height:1.75;">${leaf(cta)}</p><p style="font-size:10px;color:rgba(255,255,255,0.68);letter-spacing:1.6px;margin:0;">${leaf("LIKE · SHARE · FOLLOW")}</p></section>`;
   }
@@ -1148,6 +1490,38 @@ function renderCtaBlock(cta, theme) {
     return `<section data-profile-target="cta" style="border-top:1px solid ${theme.underlineColor};margin:0 20px 24px;padding-top:18px;text-align:center;"><p style="font-size:13px;font-weight:800;color:#111827;margin:0;line-height:1.8;">${leaf(cta)}</p></section>`;
   }
   return `<section data-profile-target="cta" style="background:radial-gradient(circle at center,#F9FAFB 0%,#FFFFFF 100%);border:1px solid #E5E7EB;border-radius:16px;padding:32px 20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);margin:0 0 24px;"><p style="font-size:13px;font-weight:bold;color:#111827;margin-bottom:20px;line-height:1.6;">${leaf(cta)}</p><p style="font-size:10px;color:#9CA3AF;letter-spacing:1px;margin:0;">${leaf("THANKS FOR READING")}</p></section>`;
+}
+
+function renderHistoryItem(block, theme, historyNo) {
+  const title = block.text.replace(/^《|》$/g, "");
+  if (state.componentStyle.history === "timeline") {
+    return `<section${previewMark(block)} style="position:relative;margin:0 0 12px;padding-left:28px;">
+  <span style="position:absolute;left:0;top:5px;width:12px;height:12px;border-radius:999px;background:${theme.mainColor};box-shadow:0 0 0 5px ${themeSoft(theme)};"><span leaf=""><br></span></span>
+  <section style="border-left:1px solid ${theme.underlineColor};padding:0 0 12px 14px;">
+    <p style="margin:0 0 2px;font-size:10px;font-weight:900;color:${theme.mainColor};letter-spacing:1.5px;">${leaf("READ " + String(historyNo).padStart(2, "0"))}</p>
+    <p style="margin:0;font-size:14px;font-weight:850;color:#111827;line-height:1.65;">${inline(title, theme)}</p>
+  </section>
+</section>`;
+  }
+  if (state.componentStyle.history === "ticket") {
+    return `<section${previewMark(block)} style="margin-bottom:12px;background:#fffef8;border:1px solid #1a1a1a;box-shadow:3px 3px 0 #1a1a1a;padding:12px 12px;">
+  <section style="display:flex;align-items:center;gap:12px;">
+    <span style="display:inline-block;min-width:34px;height:34px;line-height:34px;text-align:center;background:${theme.mainColor};color:#FFFFFF;font-size:12px;font-weight:900;">${leaf(String(historyNo).padStart(2, "0"))}</span>
+    <section style="min-width:0;flex:1;">
+      <p style="margin:0;font-size:14px;font-weight:850;color:#111827;line-height:1.65;">${inline(title, theme)}</p>
+      <p style="margin:2px 0 0;font-size:9px;color:#9CA3AF;letter-spacing:1.4px;">${leaf("ADMIT ONE · HISTORY")}</p>
+    </section>
+  </section>
+</section>`;
+  }
+  return `<section${previewMark(block)} style="margin-bottom:12px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid #E5E7EB;border-radius:14px;padding:14px 14px;box-shadow:0 5px 16px rgba(15,23,42,0.05);">
+  <section style="display:flex;gap:12px;align-items:flex-start;">
+    <span style="display:inline-block;min-width:34px;height:34px;line-height:34px;text-align:center;border-radius:10px;background:${theme.mainColor};color:#FFFFFF;font-size:12px;font-weight:900;">${leaf(String(historyNo).padStart(2, "0"))}</span>
+    <section style="min-width:0;">
+      <p style="margin:0;font-size:14px;font-weight:850;color:#111827;line-height:1.65;">${inline(title, theme)}</p>
+    </section>
+  </section>
+</section>`;
 }
 
 function articleBackgroundStyle(name) {
@@ -1174,6 +1548,74 @@ function stripPreviewMarks(html) {
   return html.replace(/\sdata-preview-(start|end)="\d+"/g, "");
 }
 
+function exportPromoBlock() {
+  return `<section style="margin:30px 20px 8px;padding:16px 18px;border:1px solid rgba(5,150,105,0.18);border-radius:12px;background:linear-gradient(135deg,rgba(5,150,105,0.08),rgba(255,255,255,0.96));">
+    <p style="margin:0;font-size:14px;line-height:1.8;color:#047857;font-weight:800;text-align:center;">更多有趣内容请访问博客 sucaizy.com</p>
+  </section>`;
+}
+
+async function embedExportImages(html) {
+  const holder = document.createElement("div");
+  holder.innerHTML = html;
+  const images = Array.from(holder.querySelectorAll("img"));
+  for (const img of images) {
+    const src = String(img.getAttribute("src") || "").trim();
+    if (!src || src.startsWith("data:")) continue;
+    let dataUrl = "";
+    if (src.startsWith("asset://")) {
+      const id = src.replace("asset://", "");
+      const asset = state.assets[id];
+      dataUrl = asset?.dataUrl || "";
+      if (!dataUrl && asset?.filePath && window.gzhApp?.readImageFile) {
+        const image = await window.gzhApp.readImageFile(asset.filePath);
+        dataUrl = image?.dataUrl || "";
+      } else if (!dataUrl && asset?.fileUrl && window.gzhApp?.readImageFile) {
+        try {
+          const filePath = decodeURIComponent(asset.fileUrl.replace(/^file:\/\/\//, "")).replace(/\//g, "\\");
+          const image = await window.gzhApp.readImageFile(filePath);
+          dataUrl = image?.dataUrl || "";
+        } catch {
+          dataUrl = "";
+        }
+      }
+    } else if (src.startsWith("file:///") && window.gzhApp?.readImageFile) {
+      try {
+        const filePath = decodeURIComponent(src.replace(/^file:\/\/\//, "")).replace(/\//g, "\\");
+        const image = await window.gzhApp.readImageFile(filePath);
+        dataUrl = image?.dataUrl || "";
+      } catch {
+        dataUrl = "";
+      }
+    } else if (!/^[a-z]+:/i.test(src) && window.gzhApp?.resolveLocalImage) {
+      const image = await window.gzhApp.resolveLocalImage(src);
+      dataUrl = image?.dataUrl || "";
+    }
+    if (dataUrl) img.setAttribute("src", dataUrl);
+  }
+  return holder.innerHTML;
+}
+
+async function currentExportHtml() {
+  const clean = clipboardHtml(stripPreviewMarks(els.preview.innerHTML || state.currentHtml || ""));
+  const embedded = await embedExportImages(clean);
+  const promo = exportPromoBlock();
+  if (/<\/section>\s*$/i.test(embedded)) {
+    return embedded.replace(/<\/section>\s*$/i, `${promo}</section>`);
+  }
+  return `${embedded}${promo}`;
+}
+
+function playPreviewShowcaseScroll() {
+  if (!els.previewWrap || state.mode !== "preview") return;
+  clearTimeout(state.previewShowcaseTimer);
+  const wrap = els.previewWrap;
+  wrap.scrollTo({ top: 0, behavior: "smooth" });
+  state.previewShowcaseTimer = window.setTimeout(() => {
+    const maxTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+    if (maxTop > 8) wrap.scrollTo({ top: maxTop, behavior: "smooth" });
+  }, 260);
+}
+
 function replaceEmojiTokens(html) {
   return html.replace(/\{\{emoji:([\w-]+)\}\}/g, (_match, id) => {
     const asset = state.assets[id];
@@ -1192,7 +1634,7 @@ function renderArticle() {
   const quoteBlock = blocks.find((b) => b.type === "quote");
   const customTitle = els.articleTitle.value.trim();
   const title = customTitle || titleBlock?.text || "公众号 Markdown 排版";
-  const subtitle = els.coverSubtitle.value.trim() || quoteBlock?.text || "";
+  const subtitle = els.coverSubtitle ? els.coverSubtitle.value.trim() : (quoteBlock?.text || "");
   const headings = blocks.filter((b) => b.type === "h2").map((b) => b.text);
 
   let html = `<section style="max-width:677px;margin:0 auto;${articleBackgroundStyle(state.previewBackground)}padding:18px 0;font-family:-apple-system,BlinkMacSystemFont,'HarmonyOS Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;color:#334155;line-height:1.78;letter-spacing:0.2px;overflow-x:hidden;">`;
@@ -1234,14 +1676,7 @@ function renderArticle() {
       }
       if (historySection) {
         historyNo += 1;
-        html += `<section${previewMark(block)} style="margin-bottom:12px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid #E5E7EB;border-radius:14px;padding:14px 14px;box-shadow:0 5px 16px rgba(15,23,42,0.05);">
-  <section style="display:flex;gap:12px;align-items:flex-start;">
-    <span style="display:inline-block;min-width:34px;height:34px;line-height:34px;text-align:center;border-radius:10px;background:${theme.mainColor};color:#FFFFFF;font-size:12px;font-weight:900;">${leaf(String(historyNo).padStart(2, "0"))}</span>
-    <section style="min-width:0;">
-      <p style="margin:0;font-size:14px;font-weight:850;color:#111827;line-height:1.65;">${inline(block.text.replace(/^《|》$/g, ""), theme)}</p>
-    </section>
-  </section>
-</section>`;
+        html += renderHistoryItem(block, theme, historyNo);
       } else {
         html += `<section${previewMark(block)} style="margin-bottom:14px;"><p style="margin:0 0 6px;"><span style="display:inline-block;font-size:13px;font-weight:700;color:${theme.mainColor};background:${themeSoft(theme)};padding:3px 10px;border-radius:999px;"><span style="display:inline-block;width:6px;height:6px;background:${theme.mainColor};border-radius:50%;margin-right:5px;vertical-align:middle;"><span leaf=""><br></span></span>${inline(block.text, theme)}</span></p></section>`;
       }
@@ -1349,7 +1784,15 @@ function scrollPreviewToProfileTarget(target) {
 }
 
 function profileTargetForInput(input) {
-  if (input === els.articleTitle || input === els.coverLabel || input === els.coverSubtitle) return "cover";
+  if ([
+    els.articleTitle,
+    els.coverLabel,
+    els.coverSubtitle,
+    els.coverMetaEyebrow,
+    els.coverMetaFooter,
+    els.coverMetaChips,
+    els.coverMetaFooterTags
+  ].includes(input)) return "cover";
   if (input === els.authorName || input === els.authorBio) return "author";
   if (input === els.ctaText) return "cta";
   return "";
@@ -1415,6 +1858,15 @@ function wrapSelection(prefix, suffix, fallback) {
   });
 }
 
+function ensureHistorySection() {
+  if (/^##\s*(历史文章|推荐阅读|延伸阅读|往期文章)/m.test(els.source.value)) return;
+  const block = `\n\n## 历史文章\n- 《从零搭建一个离线公众号排版器》\n- 《Markdown 写作如何复制到微信公众号》\n- 《AI 工具测评文章的排版清单》\n`;
+  const start = els.source.value.length;
+  els.source.value += block;
+  focusSourceRange(start + block.length, start + block.length);
+  syncArticleTitleFromMarkdown();
+}
+
 function insertLink() {
   const range = sourceSelection();
   const selected = els.source.value.slice(range.start, range.end) || "链接文字";
@@ -1438,7 +1890,7 @@ async function insertImageMarkdown(name, dataUrl, fileUrl = "", filePath = "") {
     }
   }
   const id = createAsset(name, dataUrl, copyFileUrl, copyFilePath);
-  insertLine(`![${name || "粘贴图片"}](asset://${id})`);
+  insertLine(`![](asset://${id})`);
   els.status.textContent = copyFileUrl ? "图片已缓存，复制到公众号时会同步带图" : "图片已作为附件插入";
 }
 
@@ -1596,6 +2048,36 @@ function renderComponentPanel() {
   if (!els.componentGroups) return;
   const theme = state.themes.find((t) => t.id === els.themeSelect.value) || state.themes[0];
   els.componentGroups.innerHTML = "";
+  if (state.themes.length) {
+    const themeSection = document.createElement("section");
+    themeSection.className = "component-group";
+    themeSection.innerHTML = `<div class="component-group-head">
+      <div>
+        <strong>主题组件库</strong>
+        <small>来自 gzh-design-skill 的 6 套主题组件库，点击即可切换整套风格。</small>
+      </div>
+      <span>${esc(state.themes.length)} 套</span>
+    </div>`;
+    const themeGrid = document.createElement("div");
+    themeGrid.className = "component-choice-grid";
+    for (const item of state.themes) {
+      const btn = document.createElement("button");
+      btn.className = "component-choice";
+      btn.type = "button";
+      btn.classList.toggle("active", item.id === els.themeSelect.value);
+      btn.innerHTML = `<span class="component-sample" style="background:linear-gradient(135deg,${esc(item.mainColor)},${esc(item.underlineColor)});"></span>
+        <strong>${esc(item.name)}</strong>
+        <small>${esc(item.scene || item.id)}</small>`;
+      btn.addEventListener("click", () => {
+        els.themeSelect.value = item.id;
+        updateThemeMeta();
+        applyThemeComponentPreset(item.id, true);
+      });
+      themeGrid.appendChild(btn);
+    }
+    themeSection.appendChild(themeGrid);
+    els.componentGroups.appendChild(themeSection);
+  }
   for (const group of componentOptions) {
     const section = document.createElement("section");
     section.className = "component-group";
@@ -1620,11 +2102,36 @@ function renderComponentPanel() {
         <small>${esc(option.desc)}</small>`;
       btn.addEventListener("click", () => {
         state.componentStyle[group.key] = option.id;
+        if (group.key === "cover") updateCoverFieldVisibility();
+        if (group.key === "history") ensureHistorySection();
         renderComponentPanel();
         renderArticle();
+        playPreviewShowcaseScroll();
         saveState();
       });
       grid.appendChild(btn);
+    }
+    if (group.key === "toc") {
+      const tocMeta = document.createElement("div");
+      tocMeta.className = "component-subcontrols";
+      tocMeta.innerHTML = `
+        <label class="mini-field">
+          <span>目录配色</span>
+          <select data-toc-palette>
+            <option value="single">仅首项高亮</option>
+            <option value="all">全部上色</option>
+          </select>
+        </label>`;
+      const paletteSel = tocMeta.querySelector("[data-toc-palette]");
+      paletteSel.value = state.componentStyle.tocPalette || "single";
+      paletteSel.addEventListener("change", () => {
+        state.componentStyle.tocPalette = paletteSel.value;
+        renderComponentPanel();
+        renderArticle();
+        playPreviewShowcaseScroll();
+        saveState();
+      });
+      section.appendChild(tocMeta);
     }
     section.appendChild(grid);
     els.componentGroups.appendChild(section);
@@ -1760,9 +2267,11 @@ function saveState() {
     articleTitle: els.articleTitle.value,
     coverLabel: els.coverLabel.value,
     coverSubtitle: els.coverSubtitle.value,
+    coverMeta: state.coverMeta,
     authorName: els.authorName.value,
     authorBio: els.authorBio.value,
     ctaText: els.ctaText.value,
+    coverRightImage: state.coverRightImage || "",
     assets: lightweightAssets,
     emojis: lightweightEmojis,
     emojiInsertMode: state.emojiInsertMode,
@@ -1790,6 +2299,12 @@ function loadState() {
     const data = JSON.parse(raw);
     if (data.theme) els.themeSelect.value = data.theme;
     if (data.articleTitle) els.articleTitle.value = data.articleTitle;
+    state.coverMeta = { ...state.coverMeta, ...(data.coverMeta || {}) };
+    if (els.coverMetaEyebrow) els.coverMetaEyebrow.value = state.coverMeta.eyebrow || "";
+    if (els.coverMetaFooter) els.coverMetaFooter.value = state.coverMeta.footer || "";
+    if (els.coverMetaChips) els.coverMetaChips.value = state.coverMeta.chips || "";
+    if (els.coverMetaFooterTags) els.coverMetaFooterTags.value = state.coverMeta.footerTags || "";
+    state.coverRightImage = data.coverRightImage || "";
     state.assets = {};
     state.emojis = (data.emojis || []).map((emoji) => ({
       ...emoji,
@@ -1802,6 +2317,7 @@ function loadState() {
     setPreviewBackground(data.previewBackground || "none");
     setBackgroundTune(data.backgroundColor || "#94a3b8", data.backgroundStrength || 18);
     state.componentStyle = normalizeComponentStyle(data.componentStyle);
+    state.componentStyle.tocPalette = data.componentStyle?.tocPalette || "single";
     setComponentCollapsed(Boolean(data.componentCollapsed));
     setSyntaxCollapsed(data.syntaxCollapsed || false);
     setSettingsCollapsed(true);
@@ -1813,21 +2329,14 @@ function loadState() {
 
 async function init() {
   els.status.textContent = "正在启动宝藏排版器...";
-  els.source.value = markdownSample;
+  setSettingsCollapsed(true);
+  const startupSource = els.source.value;
+  const shouldLoadFullSample = !startupSource.trim() || /## 01 快速开始/.test(startupSource);
+  if (!shouldLoadFullSample) els.source.value = startupSource;
   if (!els.articleTitle.value) els.articleTitle.value = defaultProfile.articleTitle;
 
-  state.skill = await window.gzhApp.loadSkill();
-  state.themes = state.skill.themes;
-  els.themeSelect.innerHTML = "";
-  for (const theme of state.themes) {
-    const opt = document.createElement("option");
-    opt.value = theme.id;
-    opt.textContent = theme.name;
-    els.themeSelect.appendChild(opt);
-  }
-  els.templateCount.textContent = `${state.themes.length} 套`;
   renderSyntaxBar();
-  loadState();
+  setThemeOptions(quickStartThemes);
   renderAssets();
   setComponentCollapsed(state.componentCollapsed);
   renderComponentPanel();
@@ -1835,26 +2344,76 @@ async function init() {
   if (els.emojiGrid) {
     els.emojiGrid.innerHTML = `<div class="emoji-empty">表情包正在准备中...</div>`;
   }
-  els.coverLabel.value = defaultProfile.coverLabel;
-  els.coverSubtitle.value = defaultProfile.coverSubtitle;
-  els.authorName.value = defaultProfile.authorName;
-  els.authorBio.value = defaultProfile.authorBio;
-  els.ctaText.value = defaultProfile.ctaText;
+  if (!els.coverLabel.value) els.coverLabel.value = defaultProfile.coverLabel;
+  if (!els.coverSubtitle.value) els.coverSubtitle.value = defaultProfile.coverSubtitle;
+  if (!els.coverMetaEyebrow.value) els.coverMetaEyebrow.value = defaultProfile.coverMetaEyebrow;
+  if (!els.coverMetaFooter.value) els.coverMetaFooter.value = defaultProfile.coverMetaFooter;
+  if (!els.coverMetaChips.value) els.coverMetaChips.value = defaultProfile.coverMetaChips;
+  if (!els.coverMetaFooterTags.value) els.coverMetaFooterTags.value = defaultProfile.coverMetaFooterTags;
+  if (!els.authorName.value) els.authorName.value = defaultProfile.authorName;
+  if (!els.authorBio.value) els.authorBio.value = defaultProfile.authorBio;
+  if (!els.ctaText.value) els.ctaText.value = defaultProfile.ctaText;
   renderProfilePresets("__default");
   if (!state.themes.some((theme) => theme.id === els.themeSelect.value) && state.themes[0]) {
     els.themeSelect.value = state.themes[0].id;
   }
-  await seedDemoEmojiAssets();
-  await importLocalMarkdownImages();
   syncArticleTitleFromMarkdown();
   updateThemeMeta();
-  renderComponentPanel();
-  renderComponentPresets("__default");
-  renderArticle();
-  saveState();
-  window.setTimeout(renderEmojiPanel, 80);
+  applyThemeComponentPreset(els.themeSelect.value);
   updateWechatNetworkState();
-  els.status.textContent = "离线模板已加载";
+  els.status.textContent = "界面已就绪，正在加载离线模板...";
+
+  window.setTimeout(async () => {
+    try {
+      if (shouldLoadFullSample) {
+        els.source.value = markdownSample;
+        syncArticleTitleFromMarkdown();
+        renderArticle();
+      }
+      const preferredTheme = els.themeSelect.value;
+      state.skill = await window.gzhApp.loadSkill();
+      setThemeOptions(state.skill.themes || quickStartThemes, preferredTheme);
+      updateThemeMeta();
+      renderComponentPanel();
+      renderArticle();
+      els.status.textContent = "正在准备示例图片与表情...";
+      if (loadEmojiLibrary()) renderEmojiPanel();
+      await seedDemoEmojiAssets();
+      const changed = await importLocalMarkdownImages();
+      if (changed || state.assets["demo-emoji-aru"]) renderArticle();
+      renderEmojiPanel();
+      saveState();
+      els.status.textContent = "离线模板已加载";
+    } catch (error) {
+      console.warn("deferred skill load failed", error);
+      renderEmojiPanel();
+      els.status.textContent = "已使用快速启动模板";
+    }
+  }, 700);
+}
+
+async function exportArticle(type) {
+  if (!window.gzhApp?.exportDocument) {
+    els.status.textContent = "当前版本暂不支持导出，请重新启动软件后再试";
+    return;
+  }
+  try {
+    els.status.textContent = "正在准备导出内容...";
+    if (await importLocalMarkdownImages()) renderArticle();
+    await ensureClipboardImagesCached();
+    const title = (els.articleTitle.value || markdownTitle() || "宝藏排版器文章").trim();
+    const exportHtml = await currentExportHtml();
+    const result = await window.gzhApp.exportDocument(type, exportHtml, title);
+    if (result?.canceled) {
+      els.status.textContent = "已取消导出";
+      return;
+    }
+    const label = type === "pdf" ? "PDF" : "HTML";
+    els.status.textContent = `${label} 已导出：${result.filePath || ""}`;
+  } catch (error) {
+    console.error(error);
+    els.status.textContent = `导出失败：${error.message}`;
+  }
 }
 
 document.getElementById("previewTab").addEventListener("click", () => setMode("preview"));
@@ -1862,7 +2421,7 @@ document.getElementById("htmlTab")?.addEventListener("click", () => setMode("htm
 els.emojiTab?.addEventListener("click", () => setMode("emojis"));
 document.getElementById("templatesTab").addEventListener("click", () => setMode("templates"));
 document.getElementById("githubBtn").addEventListener("click", () => {
-  window.gzhApp.openExternal("https://github.com/isjiamu/gzh-design-skill");
+  window.gzhApp.openExternal("https://sucaizy.com");
 });
 els.settingsToggle?.addEventListener("click", () => {
   setSettingsCollapsed(!state.settingsCollapsed);
@@ -1915,6 +2474,24 @@ document.getElementById("copyRichBtn").addEventListener("click", async () => {
   els.status.textContent = `富文本已复制，可粘贴到公众号${imageCopySummary()}${copiedFromDom ? "，已使用网页复制模式" : ""}`;
   showCopyToast(`已复制完成${imageCopySummary()}，现在只需粘贴到公众号编辑器即可。`);
 });
+els.exportMenuBtn?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (!els.exportMenu) return;
+  const open = !els.exportMenu.hidden;
+  els.exportMenu.hidden = open;
+});
+els.exportMenu?.querySelectorAll("[data-export-type]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const type = btn.dataset.exportType;
+    if (els.exportMenu) els.exportMenu.hidden = true;
+    exportArticle(type);
+  });
+});
+document.addEventListener("click", (event) => {
+  if (!els.exportMenu || els.exportMenu.hidden) return;
+  if (els.exportMenu.contains(event.target) || event.target === els.exportMenuBtn) return;
+  els.exportMenu.hidden = true;
+});
 els.source.addEventListener("paste", handlePaste);
 els.source.addEventListener("keydown", handleEditorShortcut);
 ["click", "keyup", "select", "focus", "input"].forEach((eventName) => {
@@ -1955,7 +2532,7 @@ els.emojiImportBtn?.addEventListener("click", importEmojiImages);
 els.emojiFolderBtn?.addEventListener("click", () => importEmojiImages("folder"));
 els.emojiClearBtn?.addEventListener("click", clearEmojis);
 els.componentResetBtn?.addEventListener("click", () => {
-  setComponentStyle(defaultComponentStyle, "__default");
+  setComponentStyle(defaultComponentStyle, "__default", true);
   saveState();
 });
 els.componentCollapseBtn?.addEventListener("click", () => {
@@ -1967,16 +2544,26 @@ els.deleteComponentPresetBtn?.addEventListener("click", deleteComponentPreset);
 els.componentPresetSelect?.addEventListener("change", () => {
   const name = els.componentPresetSelect.value;
   if (name === "__default") {
-    setComponentStyle(defaultComponentStyle, "__default");
+    setComponentStyle(defaultComponentStyle, "__default", true);
     saveState();
     return;
   }
   const preset = readComponentPresets().find((item) => item.name === name);
   if (preset?.style) {
     if (els.componentPresetName) els.componentPresetName.value = preset.name;
-    setComponentStyle(preset.style, preset.name);
+    setComponentStyle(preset.style, preset.name, true);
     saveState();
   }
+});
+els.preview?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.closest("[data-cover-right-image]")) return;
+  const image = await window.gzhApp.pickImage();
+  if (!image?.dataUrl) return;
+  state.coverRightImage = image.dataUrl;
+  renderArticle();
+  saveState();
 });
 els.profilePresetSelect?.addEventListener("change", () => {
   const name = els.profilePresetSelect.value;
@@ -2006,8 +2593,7 @@ window.addEventListener("online", updateWechatNetworkState);
 window.addEventListener("offline", updateWechatNetworkState);
 els.themeSelect.addEventListener("change", () => {
   updateThemeMeta();
-  renderComponentPanel();
-  renderArticle();
+  applyThemeComponentPreset(els.themeSelect.value, true);
 });
 function handleArticleEdit(event) {
   const profileTarget = profileTargetForInput(event?.target);
@@ -2027,6 +2613,10 @@ function handleArticleEdit(event) {
   els.articleTitle,
   els.coverLabel,
   els.coverSubtitle,
+  els.coverMetaEyebrow,
+  els.coverMetaFooter,
+  els.coverMetaChips,
+  els.coverMetaFooterTags,
   els.authorName,
   els.authorBio,
   els.ctaText

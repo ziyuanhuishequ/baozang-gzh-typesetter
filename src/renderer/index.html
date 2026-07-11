@@ -6,7 +6,7 @@
   <title>宝藏排版器</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body>
+<body class="settings-collapsed">
   <main class="app">
     <section class="workspace">
       <aside class="settings">
@@ -31,7 +31,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" hidden>
           <div class="panel-head">
             <span>主题模板</span>
             <small id="templateCount">加载中</small>
@@ -66,6 +66,22 @@
           <label class="field">
             <span>封面副标题</span>
             <input id="coverSubtitle" placeholder="留空取开头引用">
+          </label>
+          <label class="field">
+            <span>头图副标题</span>
+            <input id="coverMetaEyebrow" placeholder="提示词只是另一种语言">
+          </label>
+          <label class="field">
+            <span>底部文案</span>
+            <input id="coverMetaFooter" placeholder="Agent Skills · 深度拆解">
+          </label>
+          <label class="field">
+            <span>标签分隔串</span>
+            <input id="coverMetaChips" placeholder="Prompt · Context · Skills">
+          </label>
+          <label class="field">
+            <span>底部标签串</span>
+            <input id="coverMetaFooterTags" placeholder="可复用 · 实战">
           </label>
           <label class="field">
             <span>作者名</span>
@@ -139,8 +155,8 @@
 
         <section class="panel compact link-panel">
           <button id="githubBtn" class="link-btn" type="button">
-            <span>GitHub</span>
-            <small>查看源项目</small>
+            <span>更多有趣黑科技</span>
+            <small>访问 sucaizy.com</small>
           </button>
         </section>
       </aside>
@@ -159,7 +175,15 @@
         </div>
         <section id="syntaxBar" class="syntax-bar"></section>
         <section id="assetStrip" class="asset-strip" aria-label="图片附件"></section>
-        <textarea id="source" spellcheck="false" placeholder="粘贴 Markdown 或纯文本。支持 Ctrl+V 粘贴图片。"></textarea>
+        <textarea id="source" spellcheck="false" placeholder="粘贴 Markdown 或纯文本。支持 Ctrl+V 粘贴图片。">
+## 01 快速开始
+左侧输入 Markdown，右侧实时预览公众号排版效果。
+
+## 02 图片说明
+默认插入图片不会显示文件名；如果需要描述，写成：![图片描述](图片地址)。
+
+## 03 复制发布
+排版完成后，点击右上角复制到公众号即可。</textarea>
         <section id="emojiQuickPopover" class="emoji-popover" aria-hidden="true">
           <div class="emoji-popover-head">
             <strong>选择表情包</strong>
@@ -184,12 +208,19 @@
             <button id="settingsToggle" class="btn subtle" type="button">显示设置</button>
             <button id="sampleBtn" class="btn ghost" type="button">载入语法示例</button>
             <button id="copyHtmlBtn" class="btn hidden-action" type="button" hidden>复制 HTML</button>
+            <div class="export-menu-wrap">
+              <button id="exportMenuBtn" class="btn subtle export-menu-btn" type="button">导出 ▾</button>
+              <div id="exportMenu" class="export-menu" hidden>
+                <button class="export-menu-item" data-export-type="html" type="button">导出 HTML</button>
+                <button class="export-menu-item" data-export-type="pdf" type="button">导出 PDF</button>
+              </div>
+            </div>
             <button id="copyRichBtn" class="btn primary" type="button">复制到公众号</button>
           </div>
         </div>
 
         <div id="previewWrap" class="preview-wrap">
-          <article id="preview" class="wechat-page"></article>
+          <article id="preview" class="wechat-page"><section style="max-width:677px;margin:0 auto;background:#fff;padding:18px 0;font-family:-apple-system,BlinkMacSystemFont,'HarmonyOS Sans SC','PingFang SC','Microsoft YaHei',Arial,sans-serif;color:#334155;line-height:1.78;overflow-x:hidden;"><section style="margin:0 0 32px;background:#fff;border:1px solid rgba(16,185,129,0.14);border-radius:20px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);width:100%;"><section style="padding:20px 20px 18px;"><section style="display:flex;align-items:center;gap:8px;margin-bottom:14px;"><span style="width:8px;height:8px;background:#059669;border-radius:999px;"><span leaf=""><br></span></span><span style="font-size:11px;font-weight:900;letter-spacing:3px;color:#059669;"><span leaf="">GZH WORKBENCH</span></span><section style="flex:1;height:1px;overflow:hidden;background:linear-gradient(to right,rgba(5,150,105,0.14),transparent);"><span leaf=""><br></span></section></section><p style="font-size:14px;color:#CBD5E1;margin:0 0 10px;font-weight:700;"><span leaf="">更美观优雅的公众号排版器</span></p><p style="font-size:26px;font-weight:900;color:#111827;margin:0;line-height:1.08;"><span leaf="">公众号 Markdown 排版</span></p><section style="width:56px;height:3px;background:linear-gradient(to right,#059669,#A7F3D0);border-radius:999px;margin:14px 0;"><span leaf=""><br></span></section><p style="font-size:13px;color:#94A3B8;margin:0;line-height:1.7;"><span leaf="">示例文章正在准备中，打开即可开始编辑和预览。</span></p></section><section style="background:linear-gradient(135deg,#059669,#064E3B);padding:12px 20px;"><p style="font-size:12px;color:rgba(255,255,255,0.92);margin:0;font-weight:800;"><span leaf="">离线模板 · 实时预览 · 一键复制到公众号</span></p></section></section><section style="margin:0 20px 24px;"><p style="margin:0 0 14px;font-size:15px;line-height:1.92;text-align:justify;color:#334155;"><span leaf="">左侧输入 Markdown，右侧会实时显示公众号富文本效果。完整示例会在启动后自动载入。</span></p></section></section></article>
         </div>
         <pre id="htmlOut" class="html-out"></pre>
         <section id="emojiPanel" class="emoji-panel">

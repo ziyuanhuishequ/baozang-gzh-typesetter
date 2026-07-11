@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("gzhApp", {
   pickImage: () => ipcRenderer.invoke("dialog:pickImage"),
   pickEmojiImages: () => ipcRenderer.invoke("dialog:pickEmojiImages"),
   pickEmojiFolder: () => ipcRenderer.invoke("dialog:pickEmojiFolder"),
+  exportDocument: (type, html, title) => ipcRenderer.invoke("document:export", type, html, title),
   openWechat: (target) => ipcRenderer.invoke("wechat:open", target),
   openExternal: (url) => ipcRenderer.invoke("external:open", url)
 });
