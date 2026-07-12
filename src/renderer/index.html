@@ -149,6 +149,14 @@
               <span>深浅 <b id="backgroundStrengthValue">18%</b></span>
               <input id="backgroundStrength" type="range" min="4" max="32" step="1" value="18">
             </label>
+            <label class="bg-range-field">
+              <span>正文字号 <b id="articleFontSizeValue">15px</b></span>
+              <input id="articleFontSize" type="range" min="13" max="19" step="1" value="15">
+            </label>
+            <label class="bg-range-field">
+              <span>文字深浅 <b id="articleTextToneValue">68%</b></span>
+              <input id="articleTextTone" type="range" min="42" max="88" step="1" value="68">
+            </label>
           </div>
           <p class="hint">背景会写入文章正文，复制到公众号时会一起带过去。</p>
         </section>
@@ -168,9 +176,13 @@
             <small id="meta">0 字</small>
           </div>
           <div class="syntax-head-actions">
-            <small>点击下方语法即可插入或包裹选中文案</small>
+            <small></small>
             <button id="emojiQuickBtn" class="mini-toggle" type="button">表情包插入</button>
             <button id="syntaxToggle" class="mini-toggle" type="button">收起语法</button>
+            <button id="assetToggle" class="mini-toggle" type="button">隐藏图片</button>
+            <button id="manualDraftBtn" class="mini-toggle manual-draft-btn" type="button">暂存文章</button>
+            <button id="saveDraftBtn" class="mini-toggle draft-save-btn" type="button">实时保存</button>
+            <span id="draftSaveLight" class="draft-save-light off" title="实时保存未开启"></span>
           </div>
         </div>
         <section id="syntaxBar" class="syntax-bar"></section>
@@ -202,7 +214,7 @@
             <button id="previewTab" class="tab active" type="button">公众号预览</button>
             <button id="htmlTab" class="tab hidden-action" type="button" hidden>HTML</button>
             <button id="emojiTab" class="tab" type="button">表情包管理</button>
-            <button id="templatesTab" class="tab" type="button">如何公众号发布文章</button>
+            <button id="templatesTab" class="tab" type="button">草稿文章</button>
           </div>
           <div class="top-actions">
             <button id="settingsToggle" class="btn subtle" type="button">显示设置</button>
@@ -237,31 +249,21 @@
           </div>
           <div id="emojiGrid" class="emoji-grid"></div>
         </section>
-        <section id="templatePanel" class="template-panel wechat-panel">
-          <section class="wechat-connect-card">
-            <div class="wechat-connect-icon">微</div>
-            <p class="wechat-kicker">WECHAT OFFICIAL ACCOUNT</p>
-            <h2>连接微信公众号后台</h2>
-            <p class="wechat-copy">登录后可进入公众号草稿页，把左侧排好的文章粘贴到编辑器中继续编辑、保存草稿或发布。</p>
-            <div class="wechat-actions">
-              <button id="wechatLoginBtn" class="wechat-primary" type="button">登录微信公众号</button>
-            </div>
-            <p id="wechatNetworkHint" class="wechat-hint">此功能需要连接网络；无网络时会提醒你先联网。</p>
-          </section>
-          <section class="wechat-steps">
+        <section id="templatePanel" class="template-panel drafts-panel">
+          <div class="drafts-hero">
             <div>
-              <strong>1</strong>
-              <span>点击登录微信公众号并扫码</span>
+              <p class="drafts-kicker">LOCAL DRAFTS</p>
+              <h2>草稿文章</h2>
+              <p>把当前正在写的内容暂存到本地，每篇草稿会生成一个 JSON 文件。下次点击草稿即可继续编辑，也方便备份和迁移。</p>
             </div>
-            <div>
-              <strong>2</strong>
-              <span>点击右上角“复制到公众号”</span>
-            </div>
-            <div>
-              <strong>3</strong>
-              <span>在公众号编辑器内粘贴并保存草稿</span>
-            </div>
-          </section>
+            <button id="draftPanelSaveBtn" class="btn primary" type="button">开启实时保存</button>
+          </div>
+          <div class="drafts-toolbar">
+            <input id="draftSearch" type="search" placeholder="搜索草稿标题或正文关键词">
+            <span id="draftSummary">0 篇草稿</span>
+            <button id="draftPathBtn" class="draft-path-btn" type="button">保存路径</button>
+          </div>
+          <div id="draftList" class="draft-list"></div>
         </section>
       </section>
     </section>
@@ -289,6 +291,43 @@
       <div class="copy-toast-actions">
         <button id="clearAssetsCancel" class="copy-toast-secondary" type="button">取消</button>
         <button id="clearAssetsConfirm" class="danger-primary" type="button">确认全清</button>
+      </div>
+    </div>
+  </section>
+  <section id="draftTitleDialog" class="draft-glass-dialog" aria-hidden="true">
+    <div class="draft-glass-card">
+      <p class="draft-dialog-kicker">ARTICLE DRAFT</p>
+      <h2>设置文章保存名称</h2>
+      <p>请选择保存路径，并手动输入这篇文章的保存名称。暂存文章会保存一次；实时保存会按 1 分钟、5 分钟、10 分钟保留三个版本。</p>
+      <label class="draft-title-field">
+        <span>文章保存名称</span>
+        <input id="draftTitleInput" type="text" placeholder="例如：公众号排版工具介绍">
+      </label>
+      <div class="draft-dialog-actions">
+        <button id="draftTitleCancel" class="draft-dialog-secondary" type="button">取消</button>
+        <button id="draftTitleConfirm" class="draft-dialog-primary" type="button">开始暂存</button>
+      </div>
+    </div>
+  </section>
+  <section id="draftDeleteDialog" class="draft-glass-dialog" aria-hidden="true">
+    <div class="draft-glass-card danger">
+      <p class="draft-dialog-kicker">DELETE DRAFT</p>
+      <h2>删除这篇暂存文章？</h2>
+      <p id="draftDeleteText">删除后会同时移除对应的草稿 JSON 文件。</p>
+      <div class="draft-dialog-actions">
+        <button id="draftDeleteCancel" class="draft-dialog-secondary" type="button">取消</button>
+        <button id="draftDeleteConfirm" class="draft-dialog-danger" type="button">确认删除</button>
+      </div>
+    </div>
+  </section>
+  <section id="draftResumeDialog" class="draft-glass-dialog" aria-hidden="true">
+    <div class="draft-glass-card">
+      <p class="draft-dialog-kicker">REALTIME SAVE</p>
+      <h2>继续保存同一篇文章？</h2>
+      <p id="draftResumeText">是否继续使用上一次的保存名称开启实时保存？</p>
+      <div class="draft-dialog-actions">
+        <button id="draftResumeNo" class="draft-dialog-secondary" type="button">否，重新命名</button>
+        <button id="draftResumeYes" class="draft-dialog-primary" type="button">是，继续保存</button>
       </div>
     </div>
   </section>

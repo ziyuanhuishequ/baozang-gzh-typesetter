@@ -3,6 +3,16 @@
   themes: [],
   assets: {},
   emojis: [],
+  drafts: [],
+  draftsDir: "",
+  draftPathReady: false,
+  realtimeSaveEnabled: false,
+  realtimeDraftTitle: "",
+  realtimeLastSavedAt: { "1m": 0, "5m": 0, "10m": 0 },
+  draftPromptResolve: null,
+  draftDeleteResolve: null,
+  draftResumeResolve: null,
+  draftAutoSaveTimer: 0,
   emojiInsertMode: "tiny",
   currentHtml: "",
   mode: "preview",
@@ -12,13 +22,19 @@
   previewFollowFrame: 0,
   previewShowcaseTimer: 0,
   renderFrame: 0,
+  renderTimer: 0,
+  lastRenderAt: 0,
   saveTimer: 0,
   syncingTitle: false,
   skipNextPreviewFollow: false,
   settingsCollapsed: true,
   syntaxCollapsed: false,
+  assetCollapsed: true,
+  profileCollapsed: false,
   backgroundColor: "#94a3b8",
   backgroundStrength: 18,
+  articleFontSize: 15,
+  articleTextTone: 68,
   coverMeta: {
     eyebrow: "提示词只是另一种语言",
     footer: "Agent Skills · 深度拆解",
@@ -67,12 +83,37 @@ const els = {
   backgroundColor: document.getElementById("backgroundColor"),
   backgroundStrength: document.getElementById("backgroundStrength"),
   backgroundStrengthValue: document.getElementById("backgroundStrengthValue"),
+  articleFontSize: document.getElementById("articleFontSize"),
+  articleFontSizeValue: document.getElementById("articleFontSizeValue"),
+  articleTextTone: document.getElementById("articleTextTone"),
+  articleTextToneValue: document.getElementById("articleTextToneValue"),
   syntaxBar: document.getElementById("syntaxBar"),
   syntaxToggle: document.getElementById("syntaxToggle"),
+  manualDraftBtn: document.getElementById("manualDraftBtn"),
+  saveDraftBtn: document.getElementById("saveDraftBtn"),
+  draftSaveLight: document.getElementById("draftSaveLight"),
+  assetToggle: document.getElementById("assetToggle"),
   templateFileSelect: document.getElementById("templateFileSelect"),
   templateSearch: document.getElementById("templateSearch"),
   templateContent: document.getElementById("templateContent"),
   templateSummary: document.getElementById("templateSummary"),
+  draftPanelSaveBtn: document.getElementById("draftPanelSaveBtn"),
+  draftSearch: document.getElementById("draftSearch"),
+  draftSummary: document.getElementById("draftSummary"),
+  draftPathBtn: document.getElementById("draftPathBtn"),
+  draftList: document.getElementById("draftList"),
+  draftTitleDialog: document.getElementById("draftTitleDialog"),
+  draftTitleInput: document.getElementById("draftTitleInput"),
+  draftTitleCancel: document.getElementById("draftTitleCancel"),
+  draftTitleConfirm: document.getElementById("draftTitleConfirm"),
+  draftDeleteDialog: document.getElementById("draftDeleteDialog"),
+  draftDeleteText: document.getElementById("draftDeleteText"),
+  draftDeleteCancel: document.getElementById("draftDeleteCancel"),
+  draftDeleteConfirm: document.getElementById("draftDeleteConfirm"),
+  draftResumeDialog: document.getElementById("draftResumeDialog"),
+  draftResumeText: document.getElementById("draftResumeText"),
+  draftResumeNo: document.getElementById("draftResumeNo"),
+  draftResumeYes: document.getElementById("draftResumeYes"),
   emojiTab: document.getElementById("emojiTab"),
   emojiPanel: document.getElementById("emojiPanel"),
   componentGroups: document.getElementById("componentGroups"),
@@ -103,6 +144,9 @@ const els = {
   clearAssetsCancelX: document.getElementById("clearAssetsCancelX"),
   clearAssetsConfirm: document.getElementById("clearAssetsConfirm"),
   settingsToggle: document.getElementById("settingsToggle"),
+  profilePanel: null,
+  profilePanelBody: null,
+  profileCollapseBtn: null,
   profilePresetSelect: document.getElementById("profilePresetSelect"),
   profilePresetName: document.getElementById("profilePresetName"),
   saveProfilePresetBtn: document.getElementById("saveProfilePresetBtn"),
@@ -128,6 +172,7 @@ const defaultProfile = {
 const profilePresetKey = "gzh-profile-presets";
 const componentPresetKey = "gzh-component-presets";
 const emojiLibraryKey = "gzh-emoji-library";
+const articleDraftKey = "gzh-article-drafts";
 
 const defaultComponentStyle = {
   cover: "classic",
@@ -254,8 +299,8 @@ function applyThemeComponentPreset(themeId, animate = false) {
   state.componentStyle = normalizeComponentStyle({ ...state.componentStyle, ...preset });
   updateCoverFieldVisibility();
   renderComponentPanel();
-  renderArticle();
-  if (animate) playPreviewShowcaseScroll();
+  if (animate) renderArticleAndScroll("cover");
+  else renderArticle();
   saveState();
 }
 
@@ -265,14 +310,12 @@ function setFieldVisible(input, visible) {
 }
 
 function updateCoverFieldVisibility() {
-  const style = state.componentStyle.cover;
   setFieldVisible(els.coverLabel, true);
   setFieldVisible(els.coverSubtitle, true);
-  const richCover = ["classic", "moyu-cover", "olive-cover", "ticket-cover"].includes(style);
-  setFieldVisible(els.coverMetaEyebrow, richCover);
-  setFieldVisible(els.coverMetaFooter, richCover);
-  setFieldVisible(els.coverMetaChips, richCover);
-  setFieldVisible(els.coverMetaFooterTags, richCover);
+  setFieldVisible(els.coverMetaEyebrow, true);
+  setFieldVisible(els.coverMetaFooter, true);
+  setFieldVisible(els.coverMetaChips, true);
+  setFieldVisible(els.coverMetaFooterTags, true);
 }
 
 function setThemeOptions(themes, preferredTheme = "") {
@@ -353,8 +396,8 @@ function setComponentStyle(style, selectedPreset = "__default", animate = false)
   state.componentStyle = normalizeComponentStyle(style);
   renderComponentPanel();
   renderComponentPresets(selectedPreset);
-  renderArticle();
-  if (animate) playPreviewShowcaseScroll();
+  if (animate) renderArticleAndScroll("cover");
+  else renderArticle();
 }
 
 function setComponentCollapsed(collapsed) {
@@ -449,6 +492,45 @@ function deleteProfilePreset() {
   els.status.textContent = `已删除预设：${name}`;
 }
 
+function setupProfileCollapsePanel() {
+  if (els.profilePanelBody || !els.profilePresetSelect) return;
+  const panel = els.profilePresetSelect.closest(".panel");
+  const head = panel?.querySelector(".panel-head");
+  if (!panel || !head) return;
+  panel.id = panel.id || "profilePanel";
+  panel.classList.add("profile-panel");
+  const body = document.createElement("div");
+  body.id = "profilePanelBody";
+  body.className = "profile-panel-body";
+  let node = head.nextSibling;
+  while (node) {
+    const next = node.nextSibling;
+    body.appendChild(node);
+    node = next;
+  }
+  panel.appendChild(body);
+  const btn = document.createElement("button");
+  btn.id = "profileCollapseBtn";
+  btn.className = "mini-toggle panel-collapse-btn";
+  btn.type = "button";
+  btn.textContent = "收起";
+  head.appendChild(btn);
+  els.profilePanel = panel;
+  els.profilePanelBody = body;
+  els.profileCollapseBtn = btn;
+  btn.addEventListener("click", () => {
+    setProfileCollapsed(!state.profileCollapsed);
+    saveState();
+  });
+}
+
+function setProfileCollapsed(collapsed) {
+  state.profileCollapsed = Boolean(collapsed);
+  els.profilePanel?.classList.toggle("collapsed", state.profileCollapsed);
+  if (els.profilePanelBody) els.profilePanelBody.classList.toggle("collapsed", state.profileCollapsed);
+  if (els.profileCollapseBtn) els.profileCollapseBtn.textContent = state.profileCollapsed ? "展开" : "收起";
+}
+
 function todayStamp() {
   const now = new Date();
   return [
@@ -531,7 +613,21 @@ electron .
 ## 04 文章背景
 现在左侧的文章背景会写入正文最外层 section，复制到公众号时会一起带过去。你可以选择网格、纸感、点阵、雾白、青绿等轻量背景，尽量保持美观但不影响阅读。
 
-## 05 表情包管理
+## 05 实时保存和草稿文章
+新版把草稿分成了 **暂存文章** 和 **实时保存** 两种方式，适合写长文、教程和测评文章时使用，避免写到一半忘记保存。
+
+点击输入框上方的 **暂存文章**，可以把当前内容手动保存一次。点击 **实时保存**，软件会先引导你选择草稿保存路径，再让你手动输入这篇文章的保存名称。两种方式共用同一个保存路径，设置过后就不需要重复设置。
+
+- 暂存文章：手动保存一次，适合阶段性备份
+- 红灯：实时保存未开启，不会自动保存
+- 绿灯：实时保存已开启，同一时间只会有一篇文章处于实时保存
+- 三档保存：同一篇文章会保留 1 分钟、5 分钟、10 分钟三个实时保存版本
+- 草稿列表：暂存版和实时保存版会用不同颜色区分，正在实时保存的文章会高亮
+- 继续编辑：在右侧 **草稿文章** 中点击继续编辑，会自动恢复内容并开启实时保存
+
+每篇草稿都会保存成单独的 JSON 文件，方便备份、迁移和后续继续编辑。文章保存名称只由你手动输入，软件不会再自动拿默认标题去生成草稿。
+
+## 06 表情包管理
 现在软件新增了本地表情包功能，适合在教程、测评和日常分享里插入一些轻量的小表情，让文章读起来更自然。
 
 你可以在右侧打开 **表情包管理**，导入单个表情包，也可以直接导入整个表情包文件夹。表情包只引用本地文件，不会打进软件本体里，所以不会让软件体积越来越大 {{emoji:demo-emoji-aru}}。
@@ -553,7 +649,7 @@ electron .
 
 ![示例原图表情](asset://demo-emoji-aru){20%}
 
-## 06 开发和使用方式
+## 07 开发和使用方式
 这个软件基于开源项目 gzh-design-skill 改造而来，作者是：**甲木 × 摸鱼小李**
 
 现在由清喜进行本地化修改，加入了 Electron 离线界面、Markdown 实时预览、样机切换、图片粘贴缓存和公众号富文本复制。
@@ -596,6 +692,55 @@ function esc(text) {
 
 function leaf(text) {
   return `<span leaf="">${esc(text)}</span>`;
+}
+
+function editableLeaf(field, text, fallback = "点击编辑") {
+  return `<span class="preview-inline-edit" data-inline-edit="${esc(field)}" contenteditable="true" spellcheck="false">${leaf(text || fallback)}</span>`;
+}
+
+function splitTitleChunks(text) {
+  const value = String(text || "").trim();
+  if (!value) return [];
+  const spaced = value.split(/(\s+)/).filter(Boolean);
+  const words = spaced.filter((item) => !/^\s+$/.test(item));
+  if (words.length >= 3) return spaced;
+  const chars = Array.from(value);
+  if (chars.length <= 5) return [value];
+  const size = Math.max(2, Math.ceil(chars.length / 3));
+  const chunks = [];
+  for (let i = 0; i < chars.length; i += size) {
+    chunks.push(chars.slice(i, i + size).join(""));
+  }
+  return chunks;
+}
+
+function coverTitlePalette(theme, style) {
+  if (style === "olive-cover") return ["#23251d", "#ed7b2f", "#5e5a51"];
+  if (style === "ticket-cover") return ["#1a1a1a", theme.mainColor, "#f59e0b"];
+  if (style === "minimal") return ["#0F172A", theme.mainColor, "#64748B"];
+  if (style === "split") return ["#0F172A", theme.mainColor, themeDeep(theme)];
+  if (style === "moyu-cover") return ["#111827", theme.mainColor, "#10B981"];
+  return ["#111827", theme.mainColor, themeDeep(theme)];
+}
+
+function editableColorTitle(field, text, fallback, theme, style) {
+  const value = String(text || fallback || "").trim();
+  const colors = coverTitlePalette(theme, style);
+  const chunks = splitTitleChunks(value);
+  const html = chunks.map((chunk, index) => {
+    if (/^\s+$/.test(chunk)) return leaf(chunk);
+    const color = colors[index % colors.length];
+    return `<span style="color:${color};"><span leaf="">${esc(chunk)}</span></span>`;
+  }).join("");
+  return `<span class="preview-inline-edit" data-inline-edit="${esc(field)}" contenteditable="true" spellcheck="false">${html}</span>`;
+}
+
+function editableTags(field, value, theme, limit = 4) {
+  const tags = splitTags(value).slice(0, limit);
+  return `<span data-tag-field="${esc(field)}" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;">
+    ${tags.map((tag) => `<span data-tag-item style="display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:999px;background:${themeSoft(theme)};color:${theme.mainColor};border:1px solid ${theme.underlineColor};font-size:11px;font-weight:800;line-height:1;"><span data-tag-value contenteditable="true" spellcheck="false">${leaf(tag)}</span><button data-tag-remove type="button" style="border:0;background:transparent;color:${theme.mainColor};font-size:12px;font-weight:900;cursor:pointer;padding:0;">×</button></span>`).join("")}
+    <button data-tag-add="${esc(field)}" type="button" style="border:1px dashed ${theme.mainColor};background:#fff;color:${theme.mainColor};border-radius:999px;padding:4px 9px;font-size:11px;font-weight:900;cursor:pointer;">+ 标签</button>
+  </span>`;
 }
 
 function normalizePunct(text) {
@@ -643,6 +788,20 @@ function themeDeep(theme) {
   return theme.deepColor || shade(theme.mainColor, 0.42);
 }
 
+function inlineEmojiHtml(asset, wrapLeaf = true) {
+  if (asset?.unavailable) return "";
+  const src = asset?.dataUrl || asset?.copyFileUrl || asset?.fileUrl || "";
+  const html = src
+    ? `<img data-emoji-asset="${esc(asset.id || "")}" src="${esc(src)}" alt="${esc(asset?.name || "表情")}" style="width:22px;height:22px;display:inline-block;vertical-align:-5px;margin:0 2px;border:0;box-shadow:none;object-fit:contain;">`
+    : `<span style="display:inline-block;vertical-align:-4px;margin:0 2px;padding:1px 4px;border-radius:4px;background:#F1F5F9;color:#64748B;font-size:10px;line-height:16px;">表情</span>`;
+  return wrapLeaf ? `<span leaf="">${html}</span>` : html;
+}
+
+function emojiTinyBroken(emoji) {
+  const text = `${emoji?.name || ""} ${emoji?.fileUrl || ""} ${emoji?.filePath || ""}`.toLowerCase();
+  return /(?:^|[\\/.-])small(?:\.|$)/.test(text) || /-small\./.test(text) || /emoji-small/.test(text);
+}
+
 function pickKeyword(text) {
   const clean = text.replace(/[锛屻€傦紒锛燂紱锛氥€佲€溾€濃€樷€欙紙锛?)]/g, " ").trim();
   const words = clean.match(/[\u4e00-\u9fffA-Za-z0-9]{4,15}/g) || [];
@@ -651,11 +810,17 @@ function pickKeyword(text) {
 
 function inline(text, theme) {
   let safe = esc(normalizePunct(text));
+  const emojiPlaceholders = [];
+  const restoreEmojiPlaceholders = (value) => emojiPlaceholders.reduce(
+    (next, item) => next.split(item.key).join(item.html),
+    value
+  );
   safe = safe.replace(/\{\{emoji:([\w-]+)\}\}/g, (_match, id) => {
     const asset = state.assets[id];
-    const src = asset?.dataUrl || asset?.fileUrl || "";
-    if (!src) return "";
-    return `<span leaf=""><img src="${esc(src)}" alt="${esc(asset.name || "表情")}" style="width:22px;height:22px;display:inline-block;vertical-align:-5px;margin:0 2px;border:0;box-shadow:none;object-fit:contain;"></span>`;
+    if (!asset) return "";
+    const key = `GZH_EMOJI_${emojiPlaceholders.length}_TOKEN`;
+    emojiPlaceholders.push({ key, html: inlineEmojiHtml(asset, true) });
+    return key;
   });
   safe = safe.replace(/`([^`]+)`/g, `<span style="background:#F3F4F6;color:${theme.mainColor};padding:2px 6px;border-radius:4px;font-size:13px;font-weight:600;"><span leaf="">$1</span></span>`);
   safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<span style="color:${theme.mainColor};border-bottom:1px solid ${theme.underlineColor};font-weight:600;"><span leaf="">$1</span></span>`);
@@ -664,14 +829,16 @@ function inline(text, theme) {
   safe = safe.replace(/==([^=]+)==/g, `<span style="background:linear-gradient(120deg,#FDE68A 0%,rgba(255,255,255,0) 100%);padding:0 4px;border-radius:2px;font-weight:600;color:#111827;"><span leaf="">$1</span></span>`);
   safe = safe.replace(/\+\+([^+]+)\+\+/g, `<span style="border-bottom:2px solid ${theme.underlineColor};font-weight:600;"><span leaf="">$1</span></span>`);
   safe = safe.replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g, `<span style="border-bottom:2px solid ${theme.underlineColor};font-weight:600;"><span leaf="">$1</span></span>`);
-  if (!/(span leaf|<strong|<em|border-bottom)/.test(safe)) {
+  if (!emojiPlaceholders.length && !/(span leaf|<strong|<em|border-bottom)/.test(safe)) {
     const raw = normalizePunct(text).trim();
     const keyword = pickKeyword(raw);
     if (keyword && raw.length > keyword.length + 8) {
-      return esc(raw).replace(esc(keyword), `<span style="border-bottom:2px solid ${theme.underlineColor};font-weight:600;"><span leaf="">${esc(keyword)}</span></span>`);
+      const highlighted = esc(raw).replace(esc(keyword), `<span style="border-bottom:2px solid ${theme.underlineColor};font-weight:600;"><span leaf="">${esc(keyword)}</span></span>`);
+      return restoreEmojiPlaceholders(highlighted);
     }
   }
-  return safe.includes("span leaf") || safe.includes("<img") ? safe : leaf(normalizePunct(text));
+  const restored = restoreEmojiPlaceholders(safe);
+  return restored.includes("span leaf") || restored.includes("<img") ? restored : leaf(normalizePunct(text));
 }
 
 function parseBlocks(text) {
@@ -755,12 +922,28 @@ function createAsset(name, dataUrl, fileUrl = "", filePath = "", meta = {}) {
     filePath,
     ...meta
   };
-  renderAssets();
+  if (!meta.skipAssetStrip) renderAssets();
   return id;
 }
 
 function emojiSrc(emoji) {
-  return emoji.fileUrl || emoji.dataUrl || "";
+  return emoji.copyFileUrl || emoji.fileUrl || emoji.dataUrl || "";
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const timer = window.setTimeout(() => reject(new Error("图片读取超时")), 8000);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      resolve(img);
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      reject(new Error("图片读取失败"));
+    };
+    img.src = src;
+  });
 }
 
 async function hydrateEmojiImage(emoji) {
@@ -788,15 +971,23 @@ function renderEmojiPanel() {
     return;
   }
   for (const emoji of state.emojis) {
+    const src = emoji.unavailable ? "" : emojiSrc(emoji);
+    if (!src) continue;
     const card = document.createElement("div");
     card.className = "emoji-card";
-    card.innerHTML = `<div class="emoji-preview"><img loading="lazy" decoding="async" alt="${esc(emoji.name)}" src="${esc(emojiSrc(emoji))}"></div>
+    card.innerHTML = `<div class="emoji-preview"><img loading="lazy" decoding="async" alt="" src="${esc(src)}"></div>
       <p class="emoji-name" title="${esc(emoji.name)}">${esc(emoji.name)}</p>
       <div class="emoji-actions">
-        <button type="button" data-mode="tiny">小图</button>
+        <button type="button" data-mode="tiny"${emoji.tinyUnsupported ? " disabled title=\"这个表情暂时不能生成小图，请用原图插入\"" : ""}>小图</button>
         <button type="button" data-mode="original">原图</button>
         <button type="button" data-mode="delete">删除</button>
       </div>`;
+    card.querySelector("img")?.addEventListener("error", () => {
+      emoji.unavailable = true;
+      saveEmojiLibrary();
+      card.remove();
+      renderEmojiQuickPanel();
+    });
     card.querySelector('[data-mode="tiny"]').addEventListener("click", () => insertEmoji(emoji, "tiny"));
     card.querySelector('[data-mode="original"]').addEventListener("click", () => insertEmoji(emoji, "original"));
     card.querySelector('[data-mode="delete"]').addEventListener("click", (event) => {
@@ -815,12 +1006,26 @@ function renderEmojiQuickPanel() {
     els.emojiQuickGrid.innerHTML = `<div class="emoji-quick-empty">还没有导入表情包，请先到“表情包管理”导入。</div>`;
     return;
   }
-  for (const emoji of state.emojis) {
+  const emojis = state.emojiInsertMode === "tiny"
+    ? state.emojis.filter((emoji) => !emoji.unavailable && !emoji.tinyUnsupported && !emojiTinyBroken(emoji) && emojiSrc(emoji))
+    : state.emojis.filter((emoji) => !emoji.unavailable && emojiSrc(emoji));
+  if (!emojis.length) {
+    els.emojiQuickGrid.innerHTML = `<div class="emoji-quick-empty">这些表情暂时不能生成小图，请切换到“原图”插入。</div>`;
+    return;
+  }
+  for (const emoji of emojis) {
+    const src = emoji.unavailable ? "" : emojiSrc(emoji);
+    if (!src) continue;
     const btn = document.createElement("button");
     btn.className = "emoji-quick-item";
     btn.type = "button";
     btn.title = emoji.name;
-    btn.innerHTML = `<img loading="lazy" decoding="async" alt="${esc(emoji.name)}" src="${esc(emojiSrc(emoji))}">`;
+    btn.innerHTML = `<img loading="lazy" decoding="async" alt="" src="${esc(src)}">`;
+    btn.querySelector("img")?.addEventListener("error", () => {
+      emoji.unavailable = true;
+      saveEmojiLibrary();
+      btn.remove();
+    });
     btn.addEventListener("click", () => {
       insertEmoji(emoji, state.emojiInsertMode);
       hideEmojiQuickPopover();
@@ -834,6 +1039,7 @@ function setEmojiInsertMode(mode = "tiny", persist = true) {
   document.querySelectorAll(".emoji-mode-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.emojiMode === state.emojiInsertMode);
   });
+  renderEmojiQuickPanel();
   if (persist) saveState();
 }
 
@@ -844,7 +1050,12 @@ function lightweightEmoji(emoji) {
     dataUrl: "",
     fileUrl: emoji.fileUrl || "",
     filePath: emoji.filePath || "",
-    mime: emoji.mime || ""
+    mime: emoji.mime || "",
+    copyFileUrl: emoji.copyFileUrl || "",
+    tinyFileUrl: emoji.tinyFileUrl || "",
+    tinyFilePath: emoji.tinyFilePath || "",
+    tinyUnsupported: Boolean(emoji.tinyUnsupported),
+    unavailable: Boolean(emoji.unavailable)
   };
 }
 
@@ -906,7 +1117,9 @@ async function importEmojiImages(source = "files") {
       dataUrl: image.dataUrl || "",
       fileUrl: image.fileUrl || "",
       filePath: image.filePath || "",
-      mime: image.mime || ""
+      mime: image.mime || "",
+      unavailable: false,
+      tinyUnsupported: false
     });
     existing.add(key);
   }
@@ -917,19 +1130,59 @@ async function importEmojiImages(source = "files") {
 }
 
 async function insertEmoji(emoji, mode) {
-  await hydrateEmojiImage(emoji);
-  const id = createAsset(emoji.name, emoji.dataUrl || emoji.fileUrl || "", emoji.fileUrl || "", emoji.filePath || "", {
-    emojiAsset: true,
-    emojiInline: mode === "tiny",
-    emojiPlain: mode === "original"
-  });
-  if (mode === "tiny") {
-    insertText(`{{emoji:${id}}}`);
-    setMode("preview");
-    els.status.textContent = "已插入超小表情";
+  if (emoji.unavailable) return;
+  if (!emoji.fileUrl && !emoji.dataUrl && emoji.filePath && window.gzhApp?.readImageFile) {
+    try {
+      const image = await window.gzhApp.readImageFile(emoji.filePath);
+      if (image?.dataUrl) {
+        emoji.dataUrl = image.dataUrl;
+        emoji.fileUrl = image.fileUrl || emoji.fileUrl || "";
+      }
+    } catch (error) {
+      console.warn("emoji image unavailable", error);
+    }
+  }
+  const src = emoji.fileUrl || emoji.dataUrl || "";
+  if (!src) {
+    emoji.unavailable = true;
+    saveEmojiLibrary();
+    renderEmojiPanel();
+    els.status.textContent = "这个表情图片加载失败，已从插入列表隐藏";
     return;
   }
-  insertLine(`![${emoji.name}](asset://${id}){20%}`);
+  if (mode === "tiny") {
+    try {
+      await loadImageElement(src);
+    } catch (error) {
+      console.warn("tiny emoji preload failed", error);
+      emoji.tinyUnsupported = true;
+      saveEmojiLibrary();
+      renderEmojiPanel();
+      els.status.textContent = "这个表情暂时不能插入小图，已从小图列表隐藏";
+      return;
+    }
+    const id = createAsset(emoji.name, src, emoji.fileUrl || "", emoji.filePath || "", {
+      emojiAsset: true,
+      emojiInline: true,
+      emojiTiny: true,
+      previewUrl: emoji.fileUrl || emoji.dataUrl || "",
+      copyFileUrl: emoji.fileUrl || "",
+      skipAssetStrip: true
+    });
+    insertText(`{{emoji:${id}}}`);
+    setMode("preview");
+    els.status.textContent = "已插入小图表情";
+    return;
+  }
+  const id = createAsset(emoji.name, src, emoji.fileUrl || "", emoji.filePath || "", {
+    emojiAsset: true,
+    emojiInline: false,
+    emojiPlain: true,
+    previewUrl: emoji.fileUrl || emoji.dataUrl || "",
+    copyFileUrl: emoji.fileUrl || "",
+    skipAssetStrip: true
+  });
+  insertLine(`![${emoji.name}](asset://${id}){20%}`, { placeCursorAfter: true });
   setMode("preview");
   els.status.textContent = "已插入原图表情";
 }
@@ -1048,7 +1301,7 @@ function clipboardHtml(html) {
 }
 
 function renderAssets() {
-  const assets = Object.values(state.assets);
+  const assets = Object.values(state.assets).filter((asset) => !asset.emojiAsset);
   els.assetStrip.innerHTML = "";
   const addBtn = document.createElement("button");
   addBtn.type = "button";
@@ -1089,9 +1342,8 @@ function renderAssets() {
     els.assetStrip.appendChild(card);
   }
 }
-
 function clearAllAssets() {
-  const count = Object.keys(state.assets).length;
+  const count = Object.values(state.assets).filter((asset) => !asset.emojiAsset).length;
   if (!count) {
     els.status.textContent = "当前没有图片可以清理";
     return;
@@ -1112,8 +1364,9 @@ function hideClearAssetsDialog() {
 }
 
 function confirmClearAllAssets() {
-  const count = Object.keys(state.assets).length;
-  state.assets = {};
+  const entries = Object.entries(state.assets);
+  const count = entries.filter(([, asset]) => !asset.emojiAsset).length;
+  state.assets = Object.fromEntries(entries.filter(([, asset]) => asset.emojiAsset));
   renderAssets();
   renderArticle();
   saveState();
@@ -1145,8 +1398,6 @@ function enLabel(text) {
 }
 
 function renderCover(title, subtitle, theme) {
-  const line1 = title.length > 16 ? title.slice(0, 16) : title;
-  const line2 = title.length > 16 ? title.slice(16, 34) : "";
   const label = els.coverLabel ? els.coverLabel.value.trim() : theme.label;
   const editDate = state.editedAt || todayStamp();
   const meta = {
@@ -1156,76 +1407,77 @@ function renderCover(title, subtitle, theme) {
     footerTags: els.coverMetaFooterTags ? els.coverMetaFooterTags.value.trim() : (state.coverMeta.footerTags || "")
   };
   state.coverMeta = meta;
-  const rightImage = state.coverRightImage ? `<img data-cover-right-image src="${esc(state.coverRightImage)}" alt="头图图片" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:14px;cursor:pointer;" title="点击更换图片">` : `<button data-cover-right-image type="button" style="width:100%;height:100%;border:1px dashed ${theme.underlineColor};border-radius:14px;background:linear-gradient(135deg,${themeSoft(theme)},#FFFFFF);color:${theme.mainColor};font-size:12px;font-weight:850;line-height:1.35;cursor:pointer;padding:0 8px;">上传<br>图片</button>`;
   const style = state.componentStyle.cover;
+  const titleHtml = editableColorTitle("articleTitle", title, "文章标题", theme, style);
+  const labelHtml = editableLeaf("coverLabel", label, "头图标签");
+  const eyebrowHtml = editableLeaf("coverMetaEyebrow", meta.eyebrow, "头图副标题");
+  const subtitleHtml = editableLeaf("coverSubtitle", subtitle, "封面副标题");
+  const footerHtml = editableLeaf("coverMetaFooter", meta.footer, "底部文案");
+  const chipsHtml = editableTags("coverMetaChips", meta.chips, theme, 4);
+  const footerTagsHtml = editableTags("coverMetaFooterTags", meta.footerTags, theme, 3);
+  const rightImage = state.coverRightImage ? `<img data-cover-right-image src="${esc(state.coverRightImage)}" alt="头图图片" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:14px;cursor:pointer;" title="点击更换图片">` : `<button data-cover-right-image type="button" style="width:100%;height:100%;border:1px dashed ${theme.underlineColor};border-radius:14px;background:linear-gradient(135deg,${themeSoft(theme)},#FFFFFF);color:${theme.mainColor};font-size:12px;font-weight:850;line-height:1.35;cursor:pointer;padding:0 8px;">上传<br>图片</button>`;
   if (style === "moyu-cover") {
-    const chips = meta.footerTags.split(/[·•｜|/，,\s]+/).filter(Boolean).slice(0, 2);
     return `<section data-profile-target="cover" style="margin:0 0 32px;background:#fff;border:1.5px solid rgba(5,150,105,0.15);border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06);width:100%;">
   <section style="padding:32px 28px 28px;">
     <section style="display:flex;align-items:center;gap:8px;margin-bottom:28px;">
       <span style="width:6px;height:6px;background:${theme.mainColor};border-radius:50%;"><span leaf=""><br></span></span>
-      <span style="font-size:11px;font-weight:700;letter-spacing:3px;color:${theme.mainColor};">${leaf(label)}</span>
+      <span style="font-size:11px;font-weight:700;letter-spacing:3px;color:${theme.mainColor};">${labelHtml}</span>
       <section style="flex:1;height:1px;overflow:hidden;background:linear-gradient(to right,rgba(5,150,105,0.12),transparent);"><span leaf=""><br></span></section>
       <span style="font-size:10px;color:#D1D5DB;font-weight:600;">${leaf(editDate)}</span>
     </section>
     <section>
-      ${meta.eyebrow ? `<p style="font-size:15px;color:#D1D5DB;margin:0 0 6px;text-decoration:line-through;letter-spacing:0.5px;">${leaf(meta.eyebrow)}</p>` : ""}
-      <p style="font-size:24px;font-weight:900;color:#111827;margin:0;line-height:1.08;letter-spacing:-1px;">${leaf(line1)}</p>
-      ${line2 ? `<p style="font-size:24px;font-weight:900;color:${theme.mainColor};margin:0 0 16px;line-height:1.08;letter-spacing:-1px;">${leaf(line2)}</p>` : ""}
+      <p style="font-size:15px;color:#D1D5DB;margin:0 0 6px;text-decoration:line-through;letter-spacing:0.5px;">${eyebrowHtml}</p>
+      <p style="font-size:24px;font-weight:900;color:#111827;margin:0;line-height:1.08;letter-spacing:-1px;">${titleHtml}</p>
       <section style="width:48px;height:3px;background:linear-gradient(to right,${theme.mainColor},#34D399);border-radius:2px;margin-bottom:12px;"><span leaf=""><br></span></section>
-      <p style="font-size:13px;color:#9CA3AF;margin:0;line-height:1.7;letter-spacing:0.5px;">${leaf(subtitle)}</p>
+      <p style="font-size:13px;color:#9CA3AF;margin:0;line-height:1.7;letter-spacing:0.5px;">${subtitleHtml}</p>
     </section>
   </section>
   <section style="background:linear-gradient(135deg,${theme.mainColor},#10B981);padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-    <p style="font-size:12px;color:rgba(255,255,255,0.9);margin:0;font-weight:600;letter-spacing:0.5px;">${leaf(meta.footer)}</p>
-    <section style="display:flex;gap:4px;flex-shrink:0;">${chips.map((tag) => `<span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:3px;font-size:8px;color:#fff;font-weight:600;">${leaf(tag)}</span>`).join("")}</section>
+    <p style="font-size:12px;color:rgba(255,255,255,0.9);margin:0;font-weight:600;letter-spacing:0.5px;">${footerHtml}</p>
+    <section style="display:flex;gap:4px;flex-shrink:0;">${footerTagsHtml}</section>
   </section>
 </section>`;
   }
   if (style === "olive-cover") {
-    const oliveImage = state.coverRightImage
-      ? `<img data-cover-right-image src="${esc(state.coverRightImage)}" alt="头图图片" style="width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;" title="点击更换图片">`
-      : `<button data-cover-right-image type="button" style="width:100%;height:100%;border:0;background:#fffaf1;color:#ed7b2f;font-size:12px;font-weight:900;cursor:pointer;">上传图片</button>`;
     return `<section data-profile-target="cover" style="margin:0 0 32px;background:#f6f2ea;border:1px solid #23251d;overflow:hidden;">
   <section style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #23251d;padding:10px 14px;">
-    <span style="font-size:11px;font-weight:900;color:#23251d;letter-spacing:2px;">${leaf(label || "FIELD NOTES")}</span>
+    <span style="font-size:11px;font-weight:900;color:#23251d;letter-spacing:2px;">${labelHtml || leaf("FIELD NOTES")}</span>
     <span style="font-size:10px;color:#6f6a5f;">${leaf(editDate)}</span>
   </section>
   <section style="display:flex;gap:18px;padding:22px 18px;align-items:stretch;">
     <section style="flex:1;min-width:0;">
-      ${meta.eyebrow ? `<p style="margin:0 0 9px;font-size:12px;color:#ed7b2f;font-weight:800;letter-spacing:1px;">${leaf(meta.eyebrow)}</p>` : ""}
-      <p style="margin:0;font-size:24px;font-weight:900;line-height:1.16;color:#23251d;">${leaf(line1)}</p>
-      ${line2 ? `<p style="margin:0 0 12px;font-size:24px;font-weight:900;line-height:1.16;color:#ed7b2f;">${leaf(line2)}</p>` : ""}
-      <p style="margin:12px 0 0;font-size:13px;color:#5e5a51;line-height:1.8;">${leaf(subtitle)}</p>
+      <p style="margin:0 0 9px;font-size:12px;color:#ed7b2f;font-weight:800;letter-spacing:1px;">${eyebrowHtml}</p>
+      <p style="margin:0;font-size:24px;font-weight:900;line-height:1.16;color:#23251d;">${titleHtml}</p>
+      <p style="margin:12px 0 0;font-size:13px;color:#5e5a51;line-height:1.8;">${subtitleHtml}</p>
+      <section style="display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:12px;">${chipsHtml}</section>
     </section>
     <section style="width:88px;flex-shrink:0;background:#fffaf1;border:1px solid #23251d;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-      ${oliveImage}
+      ${state.coverRightImage ? `<img data-cover-right-image src="${esc(state.coverRightImage)}" alt="头图图片" style="width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;" title="点击更换图片">` : `<button data-cover-right-image type="button" style="width:100%;height:100%;border:0;background:#fffaf1;color:#ed7b2f;font-size:12px;font-weight:900;cursor:pointer;">上传图片</button>`}
     </section>
   </section>
-  ${meta.footer ? `<section style="background:#23251d;color:#f6f2ea;padding:12px 18px;font-size:12px;line-height:1.7;">${leaf(meta.footer)}</section>` : ""}
+  <section style="background:#23251d;color:#f6f2ea;padding:12px 18px;font-size:12px;line-height:1.7;">${footerHtml}</section>
+  <section style="background:#fffaf1;padding:10px 18px;border-top:1px solid #23251d;">${footerTagsHtml}</section>
 </section>`;
   }
   if (style === "ticket-cover") {
-    const tags = meta.footerTags.split(/[·•｜|/，,\s]+/).filter(Boolean).slice(0, 3);
-    const author = els.authorName.value.trim();
-    const bio = els.authorBio.value.trim();
     return `<section data-profile-target="cover" style="background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;margin-bottom:32px;">
   <section style="background:${theme.mainColor};padding:12px 20px;display:flex;justify-content:space-between;align-items:center;">
-    <section style="color:#fffef8;font-size:11px;letter-spacing:4px;font-weight:600;">${leaf(label || "DEEP TOOL REVIEW")}</section>
+    <section style="color:#fffef8;font-size:11px;letter-spacing:4px;font-weight:600;">${labelHtml || leaf("DEEP TOOL REVIEW")}</section>
     <section style="color:#fffef8;font-size:11px;letter-spacing:2px;">${leaf("★★★★★")}</section>
   </section>
   <section style="display:flex;">
     <section style="flex:1;padding:24px 20px;border-right:2px dashed ${theme.underlineColor};">
-      <section style="font-size:24px;font-weight:900;color:#1a1a1a;letter-spacing:0.5px;margin-bottom:4px;text-shadow:0.5px 0 0 #1a1a1a;">${leaf(title)}</section>
-      <section style="font-size:14px;color:#666;letter-spacing:1px;margin-bottom:20px;">${leaf(subtitle)}</section>
+      <section style="font-size:24px;font-weight:900;color:#1a1a1a;letter-spacing:0.5px;margin-bottom:4px;text-shadow:0.5px 0 0 #1a1a1a;">${titleHtml}</section>
+      <section style="font-size:14px;color:#666;letter-spacing:1px;margin-bottom:12px;">${subtitleHtml}</section>
+      <section style="display:flex;flex-wrap:wrap;gap:8px 10px;margin-bottom:14px;">${chipsHtml}</section>
       <section style="border-top:1px dashed ${theme.underlineColor};margin-bottom:16px;"><span leaf=""><br></span></section>
-      ${(author || bio) ? `<section style="margin-bottom:16px;"><section style="font-size:15px;color:#1a1a1a;font-weight:700;">${leaf(author || "{{作者名}}")}</section><section style="font-size:12px;color:#888;">${leaf(bio || "{{简介}}")}</section></section>` : ""}
-      ${meta.footer ? `<section style="font-size:13px;color:#555;line-height:1.8;padding:12px;background:#F0FDF4;border:1px solid ${theme.underlineColor};">${leaf(meta.footer)}</section>` : ""}
-      ${tags.length ? `<section style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">${tags.map((tag) => `<section style="font-size:10px;color:${theme.mainColor};border:1px solid ${theme.mainColor};padding:4px 10px;">${leaf("#" + tag)}</section>`).join("")}</section>` : ""}
+      <section style="margin-bottom:16px;"><section style="font-size:15px;color:#1a1a1a;font-weight:700;">${editableLeaf("authorName", els.authorName.value.trim(), "{{作者名}}")}</section><section style="font-size:12px;color:#888;">${editableLeaf("authorBio", els.authorBio.value.trim(), "{{简介}}")}</section></section>
+      <section style="font-size:13px;color:#555;line-height:1.8;padding:12px;background:#F0FDF4;border:1px solid ${theme.underlineColor};">${footerHtml}</section>
+      <section style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">${footerTagsHtml}</section>
     </section>
     <section style="width:48px;padding:14px 4px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#F0FDF4;">
       <section style="text-align:center;"><section style="font-size:7px;color:#999;letter-spacing:1px;">${leaf("NO.")}</section><section style="font-size:18px;font-weight:900;color:${theme.mainColor};">${leaf("001")}</section></section>
-      <section style="writing-mode:vertical-rl;font-size:9px;color:#888;letter-spacing:2px;">${leaf(meta.eyebrow || "工具评测")}</section>
+      <section style="writing-mode:vertical-rl;font-size:9px;color:#888;letter-spacing:2px;">${eyebrowHtml || leaf("工具评测")}</section>
       <section style="text-align:center;"><section style="font-size:7px;color:#999;letter-spacing:1px;">${leaf("GRADE")}</section><section style="font-size:14px;font-weight:900;color:${theme.mainColor};">${leaf("S")}</section></section>
     </section>
   </section>
@@ -1237,10 +1489,10 @@ function renderCover(title, subtitle, theme) {
     return `<section data-profile-target="cover" style="margin:0 0 32px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:18px;padding:26px 24px;box-shadow:0 8px 26px rgba(15,23,42,0.07);">
   <section style="display:flex;align-items:stretch;gap:18px;">
     <section style="flex:1;min-width:0;">
-      <p style="font-size:11px;font-weight:900;letter-spacing:2.5px;color:${theme.mainColor};margin:0 0 14px;">${leaf(label)}</p>
-      <p style="font-size:25px;font-weight:900;color:#0F172A;margin:0;line-height:1.16;">${leaf(line1)}</p>
-      ${line2 ? `<p style="font-size:25px;font-weight:900;color:${theme.mainColor};margin:0 0 12px;line-height:1.16;">${leaf(line2)}</p>` : ""}
-      <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
+      <p style="font-size:11px;font-weight:900;letter-spacing:2.5px;color:${theme.mainColor};margin:0 0 14px;">${labelHtml}</p>
+      <p style="font-size:25px;font-weight:900;color:#0F172A;margin:0;line-height:1.16;">${titleHtml}</p>
+      <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${subtitleHtml}</p>
+      <section style="display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:12px;">${chipsHtml}</section>
     </section>
     <section style="width:96px;flex-shrink:0;border-left:1px solid ${theme.underlineColor};padding-left:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;">
       <section style="width:72px;height:72px;border-radius:16px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(15,23,42,0.08);">
@@ -1253,41 +1505,34 @@ function renderCover(title, subtitle, theme) {
   }
   if (style === "minimal") {
     return `<section data-profile-target="cover" style="margin:0 20px 34px;padding:24px 0 20px;border-bottom:1px solid ${theme.underlineColor};">
-  <p style="font-size:10px;font-weight:900;letter-spacing:3px;color:${theme.mainColor};margin:0 0 14px;">${leaf(label)} · ${leaf(editDate)}</p>
-  <p style="font-size:27px;font-weight:900;color:#0F172A;margin:0;line-height:1.18;">${leaf(title)}</p>
-  <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${leaf(subtitle || "Markdown 语法 · 实时预览 · 离线模板")}</p>
+  <p style="font-size:10px;font-weight:900;letter-spacing:3px;color:${theme.mainColor};margin:0 0 14px;">${labelHtml} · ${leaf(editDate)}</p>
+  <p style="font-size:27px;font-weight:900;color:#0F172A;margin:0;line-height:1.18;">${titleHtml}</p>
+  <p style="font-size:13px;color:#64748B;margin:14px 0 0;line-height:1.75;">${subtitleHtml}</p>
+  <section style="display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:12px;">${chipsHtml}</section>
 </section>`;
   }
-  const coverBits = meta.chips
-    .split(/[·•｜|/，,\s]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 4);
   return `<section data-profile-target="cover" style="margin:0 0 32px;background:#fff;border:1px solid rgba(16,185,129,0.14);border-radius:20px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);width:100%;">
   <section style="padding:20px 20px 0;">
     <section style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
       <span style="width:8px;height:8px;background:${theme.mainColor};border-radius:999px;"><span leaf=""><br></span></span>
-      <span style="font-size:11px;font-weight:900;letter-spacing:3px;color:${theme.mainColor};">${leaf(label)}</span>
+      <span style="font-size:11px;font-weight:900;letter-spacing:3px;color:${theme.mainColor};">${labelHtml}</span>
       <section style="flex:1;height:1px;overflow:hidden;background:linear-gradient(to right,rgba(5,150,105,0.14),transparent);"><span leaf=""><br></span></section>
       <span style="font-size:10px;color:#D1D5DB;font-weight:600;">${leaf(editDate)}</span>
     </section>
     <section style="padding:2px 0 18px;">
       <section style="min-width:0;">
-        ${meta.eyebrow ? `<p style="font-size:14px;color:#CBD5E1;margin:0 0 10px;font-weight:700;letter-spacing:0.5px;">${leaf(meta.eyebrow)}</p>` : ""}
-        <p style="font-size:26px;font-weight:900;color:#111827;margin:0;line-height:1.06;letter-spacing:-1px;">${leaf(line1)}</p>
-        ${line2 ? `<p style="font-size:26px;font-weight:900;color:${theme.mainColor};margin:0 0 14px;line-height:1.06;letter-spacing:-1px;">${leaf(line2)}</p>` : ""}
+        <p style="font-size:14px;color:#CBD5E1;margin:0 0 10px;font-weight:700;letter-spacing:0.5px;">${eyebrowHtml}</p>
+        <p style="font-size:26px;font-weight:900;color:#111827;margin:0;line-height:1.06;letter-spacing:-1px;">${titleHtml}</p>
         <section style="width:56px;height:3px;background:linear-gradient(to right,${theme.mainColor},${theme.underlineColor});border-radius:999px;margin-bottom:14px;"><span leaf=""><br></span></section>
-        <p style="font-size:13px;color:#94A3B8;margin:0 0 12px;line-height:1.7;">${leaf(subtitle || "Prompt · Context · Skills · 渐进式策略 · 能力包")}</p>
-        ${coverBits.length ? `<section style="display:flex;flex-wrap:wrap;gap:8px 10px;">
-          ${coverBits.map((bit, index) => `<span style="display:inline-block;padding:6px 10px;border-radius:999px;background:${index === 0 ? themeSoft(theme) : "#F8FAFC"};color:${index === 0 ? theme.mainColor : "#64748B"};border:1px solid ${index === 0 ? "rgba(5,150,105,0.14)" : "#E5E7EB"};font-size:11px;font-weight:800;line-height:1;">${leaf(bit)}</span>`).join("")}
-        </section>` : ""}
+        <p style="font-size:13px;color:#94A3B8;margin:0 0 12px;line-height:1.7;">${subtitleHtml}</p>
+        <section style="display:flex;flex-wrap:wrap;gap:8px 10px;">${chipsHtml}</section>
       </section>
     </section>
   </section>
   <section style="background:linear-gradient(135deg,${theme.mainColor},${themeDeep(theme)});padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-    <p style="font-size:12px;color:rgba(255,255,255,0.92);margin:0;font-weight:800;letter-spacing:0.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${leaf(meta.footer)}</p>
+    <p style="font-size:12px;color:rgba(255,255,255,0.92);margin:0;font-weight:800;letter-spacing:0.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${footerHtml}</p>
     <section style="display:flex;gap:6px;flex-shrink:0;">
-      ${meta.footerTags.split(/[·•｜|/，,\s]+/).filter(Boolean).slice(0, 2).map((tag) => `<span style="background:rgba(255,255,255,0.18);padding:2px 7px;border-radius:999px;font-size:8px;color:#fff;font-weight:700;line-height:1;">${leaf(tag)}</span>`).join("")}
+      ${footerTagsHtml}
     </section>
   </section>
 </section>`;
@@ -1304,7 +1549,7 @@ function renderToc(headings, theme) {
     <p style="margin:2px 0 0;font-size:10px;font-weight:700;color:#94A3B8;letter-spacing:1.2px;">${leaf(enLabel(h))}</p>
   </section>
 </section>`).join("");
-    return `<section style="margin:0 20px 32px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px;">
+    return `<section data-component-target="toc" style="margin:0 20px 32px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px;">
   <p style="font-size:11px;color:${theme.mainColor};font-weight:900;letter-spacing:1.8px;margin:0 0 14px;">${leaf("ARTICLE GUIDE")}</p>
   ${items}
 </section>`;
@@ -1330,7 +1575,7 @@ function renderToc(headings, theme) {
   <p style="font-size:10px;margin:0;line-height:1.2;color:${i === 0 || state.componentStyle.tocPalette === "all" ? "rgba(255,255,255,0.72)" : "#9CA3AF"};">${leaf(enLabel(h))}</p>
 </section>`;
   }).join("");
-  return `<section style="margin:0 20px 32px;">
+  return `<section data-component-target="toc" style="margin:0 20px 32px;">
   <section style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
     <p style="font-size:10px;color:#9CA3AF;margin:0;text-transform:uppercase;letter-spacing:2px;font-weight:600;">${leaf(tocHeadings.length + " PARTS")}</p>
     <p style="font-size:10px;color:#9CA3AF;margin:0;">${leaf("横向滑动")}</p>
@@ -1343,7 +1588,7 @@ function renderChapterTitle(block, chapterNo, theme) {
   const no = /最后|总结|结语/.test(block.text) ? "///" : String(chapterNo).padStart(2, "0");
   const part = no === "///" ? "LAST" : "PART";
   if (state.componentStyle.chapter === "ticket") {
-    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+    return `<section data-component-target="chapter"${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
   <section style="display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #1a1a1a;">
     <section style="background:${theme.mainColor};color:#fff;font-size:12px;font-weight:800;padding:6px 12px;letter-spacing:2px;">${leaf(no)}</section>
     <section style="font-size:18px;font-weight:800;color:#1a1a1a;letter-spacing:1px;">${leaf(block.text)}</section>
@@ -1352,7 +1597,7 @@ function renderChapterTitle(block, chapterNo, theme) {
 `;
   }
   if (state.componentStyle.chapter === "olive") {
-    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+    return `<section data-component-target="chapter"${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
   <section style="border:1px solid #23251d;background:#f6f2ea;margin-bottom:24px;">
     <section style="display:inline-block;background:#23251d;color:#f6f2ea;padding:5px 10px;font-size:11px;font-weight:900;letter-spacing:1.5px;">${leaf(`${part} ${no}`)}</section>
     <section style="padding:12px 14px;">
@@ -1363,7 +1608,7 @@ function renderChapterTitle(block, chapterNo, theme) {
 `;
   }
   if (state.componentStyle.chapter === "badge") {
-    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+    return `<section data-component-target="chapter"${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
   <section style="margin-bottom:24px;">
     <section style="display:inline-block;background:${theme.mainColor};border-radius:999px;padding:5px 12px;margin-bottom:12px;">
       <span style="font-size:11px;font-weight:900;color:#FFFFFF;letter-spacing:1px;">${leaf(`${part} ${no}`)}</span>
@@ -1374,14 +1619,14 @@ function renderChapterTitle(block, chapterNo, theme) {
 `;
   }
   if (state.componentStyle.chapter === "line") {
-    return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+    return `<section data-component-target="chapter"${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
   <section style="border-left:5px solid ${theme.mainColor};padding-left:14px;margin-bottom:24px;">
     <p style="margin:0 0 4px;font-size:11px;font-weight:900;color:${theme.mainColor};letter-spacing:1.5px;">${leaf(`${part} ${no}`)}</p>
     <p style="margin:0;font-size:20px;font-weight:900;color:#111827;line-height:1.45;">${leaf(block.text)}</p>
   </section>
 `;
   }
-  return `<section${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
+  return `<section data-component-target="chapter"${previewMark(block)} style="margin-top:${chapterNo === 1 ? 16 : 48}px;margin-bottom:32px;padding:0 20px;">
   <section style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
     <section style="text-align:center;flex-shrink:0;"><p style="margin:0;font-size:28px;font-weight:900;color:${theme.mainColor};line-height:1;">${leaf(no)}</p><p style="margin:0;font-size:8px;font-weight:700;color:#D1D5DB;letter-spacing:2px;">${leaf(part)}</p></section>
     <span style="width:1px;height:36px;background:#E5E7EB;flex-shrink:0;"><span leaf=""><br></span></span>
@@ -1392,26 +1637,26 @@ function renderChapterTitle(block, chapterNo, theme) {
 function renderQuoteBlock(block, theme) {
   const text = block.text.replace(/^「|」$/g, "");
   if (state.componentStyle.quote === "olive") {
-    return `<section${previewMark(block)} style="margin:0 20px 24px;background:#f6f2ea;border:1px solid #23251d;padding:16px 18px;">
+    return `<section data-component-target="quote"${previewMark(block)} style="margin:0 20px 24px;background:#f6f2ea;border:1px solid #23251d;padding:16px 18px;">
   <p style="margin:0 0 6px;font-size:11px;font-weight:900;color:#ed7b2f;letter-spacing:1.8px;">${leaf("EDITOR NOTE")}</p>
   <p style="font-size:15px;font-weight:800;color:#23251d;margin:0;line-height:1.85;">${leaf(text)}</p>
 </section>`;
   }
   if (state.componentStyle.quote === "ticket") {
-    return `<section${previewMark(block)} style="margin:0 20px 24px;background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;padding:16px 18px;">
+    return `<section data-component-target="quote"${previewMark(block)} style="margin:0 20px 24px;background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;padding:16px 18px;">
   <p style="margin:0;font-size:15px;font-weight:900;color:#1a1a1a;line-height:1.85;">${leaf(text)}</p>
 </section>`;
   }
   if (state.componentStyle.quote === "card") {
-    return `<section${previewMark(block)} style="margin:0 20px 24px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;box-shadow:0 6px 18px rgba(15,23,42,0.05);"><p style="font-size:15px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.85;">${leaf(text)}</p></section>`;
+    return `<section data-component-target="quote"${previewMark(block)} style="margin:0 20px 24px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;box-shadow:0 6px 18px rgba(15,23,42,0.05);"><p style="font-size:15px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.85;">${leaf(text)}</p></section>`;
   }
   if (state.componentStyle.quote === "quote") {
-    return `<section${previewMark(block)} style="margin:0 20px 26px;text-align:center;padding:18px 18px;border-top:1px solid ${theme.underlineColor};border-bottom:1px solid ${theme.underlineColor};"><p style="font-size:17px;font-weight:900;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf(`「${text}」`)}</p></section>`;
+    return `<section data-component-target="quote"${previewMark(block)} style="margin:0 20px 26px;text-align:center;padding:18px 18px;border-top:1px solid ${theme.underlineColor};border-bottom:1px solid ${theme.underlineColor};"><p style="font-size:17px;font-weight:900;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf(`「${text}」`)}</p></section>`;
   }
-  return `<section${previewMark(block)} style="margin:0 20px 24px;background:${themeSoft(theme)};border-radius:0 10px 10px 0;border-left:4px solid ${theme.mainColor};padding:16px 20px;"><p style="font-size:16px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf("「" + text + "」")}</p></section>`;
+  return `<section data-component-target="quote"${previewMark(block)} style="margin:0 20px 24px;background:${themeSoft(theme)};border-radius:0 10px 10px 0;border-left:4px solid ${theme.mainColor};padding:16px 20px;"><p style="font-size:16px;font-weight:800;color:${themeDeep(theme)};margin:0;line-height:1.8;">${leaf("「" + text + "」")}</p></section>`;
 }
 
-function renderImageBlock(block, theme, chapterNo) {
+function renderImageBlock(block, theme, chapterNo, markAsTarget = false) {
   const imageSrc = resolveImageSrc(block.src);
   const imageAsset = block.src.startsWith("asset://") ? state.assets[block.src.replace("asset://", "")] : null;
   const imageMargin = chapterNo ? "0 0 8px" : "0 20px 8px";
@@ -1421,17 +1666,19 @@ function renderImageBlock(block, theme, chapterNo) {
   const imageStyle = block.scale
     ? `width:${block.scale}%;max-width:100%;height:auto;display:block;margin:0 auto;`
     : "max-width:100%;height:auto;display:block;margin:0 auto;";
+  const assetAttr = imageAsset?.id ? ` data-image-asset="${esc(imageAsset.id)}"` : "";
   const plain = imageAsset?.emojiAsset || imageAsset?.emojiPlain || state.componentStyle.image === "plain";
   const shellStyle = compactFrame
     ? `display:inline-block;width:fit-content;max-width:100%;`
     : "display:block;width:100%;";
+  const targetAttr = markAsTarget ? ' data-component-target="image"' : "";
   let html = "";
   if (plain) {
-    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="${imageStyle}border:0;box-shadow:none;"></span></section>`;
+    html += `<section${targetAttr}${previewMark(block)} style="margin:${imageMargin};text-align:center;"><span leaf=""><img${assetAttr} src="${esc(imageSrc)}" style="${imageStyle}border:0;box-shadow:none;"></span></section>`;
   } else if (state.componentStyle.image === "soft") {
-    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><section style="background:${themeSoft(theme)};border-radius:16px;padding:6px;border:1px solid ${theme.underlineColor};box-shadow:0 8px 18px rgba(15,23,42,0.06);${shellStyle}"><section style="margin:0;border-radius:12px;overflow:hidden;text-align:center;background:#fff;"><span leaf=""><img src="${esc(imageSrc)}" style="${imageStyle}"></span></section></section></section>`;
+    html += `<section${targetAttr}${previewMark(block)} style="margin:${imageMargin};text-align:center;"><section style="background:${themeSoft(theme)};border-radius:16px;padding:6px;border:1px solid ${theme.underlineColor};box-shadow:0 8px 18px rgba(15,23,42,0.06);${shellStyle}"><section style="margin:0;border-radius:12px;overflow:hidden;text-align:center;background:#fff;"><span leaf=""><img${assetAttr} src="${esc(imageSrc)}" style="${imageStyle}"></span></section></section></section>`;
   } else {
-    html += `<section${previewMark(block)} style="margin:${imageMargin};text-align:center;"><section style="background:#FFF;border-radius:12px;padding:3px;border:1px solid #E5E7EB;box-shadow:0 4px 12px -2px rgba(0,0,0,0.08);${shellStyle}"><section style="margin:0;border-radius:8px;overflow:hidden;text-align:center;"><span leaf=""><img src="${esc(imageSrc)}" style="${imageStyle}"></span></section></section></section>`;
+    html += `<section${targetAttr}${previewMark(block)} style="margin:${imageMargin};text-align:center;"><section style="background:#FFF;border-radius:12px;padding:3px;border:1px solid #E5E7EB;box-shadow:0 4px 12px -2px rgba(0,0,0,0.08);${shellStyle}"><section style="margin:0;border-radius:8px;overflow:hidden;text-align:center;"><span leaf=""><img${assetAttr} src="${esc(imageSrc)}" style="${imageStyle}"></span></section></section></section>`;
   }
   if (block.alt && !plain) html += `<p style="font-size:12px;color:#9CA3AF;text-align:center;margin:${captionMargin};">${leaf("— " + block.alt)}</p>`;
   return html;
@@ -1440,28 +1687,28 @@ function renderImageBlock(block, theme, chapterNo) {
 function renderAuthorBlock(authorText, theme) {
   if (state.componentStyle.footer === "ticket") {
     return `<section data-profile-target="author" style="margin:30px 20px 14px;">
-  <p style="font-size:14px;color:#555;line-height:1.9;margin:0;text-align:justify;">${leaf(authorText)}</p>
+  <p style="font-size:14px;color:#555;line-height:1.9;margin:0;text-align:justify;">${authorText}</p>
 </section>`;
   }
   if (state.componentStyle.footer === "olive") {
     return `<section data-profile-target="author" style="margin:30px 20px 14px;border-top:1px solid #23251d;border-bottom:1px solid #23251d;padding:14px 0;">
-  <p style="font-size:14px;color:#23251d;line-height:1.9;margin:0;text-align:justify;font-weight:800;">${leaf(authorText)}</p>
+  <p style="font-size:14px;color:#23251d;line-height:1.9;margin:0;text-align:justify;font-weight:800;">${authorText}</p>
 </section>`;
   }
   if (state.componentStyle.footer === "brand") {
     return `<section data-profile-target="author" style="margin:30px 20px 14px;background:${theme.mainColor};border-radius:16px;padding:18px 20px;box-shadow:0 10px 24px rgba(15,23,42,0.12);">
   <p style="margin:0 0 6px;font-size:11px;font-weight:900;letter-spacing:1.6px;color:rgba(255,255,255,0.72);">${leaf("ABOUT AUTHOR")}</p>
-  <p style="margin:0;font-size:15px;font-weight:850;line-height:1.85;color:#FFFFFF;text-align:justify;">${leaf(authorText)}</p>
+  <p style="margin:0;font-size:15px;font-weight:850;line-height:1.85;color:#FFFFFF;text-align:justify;">${authorText}</p>
 </section>`;
   }
   if (state.componentStyle.footer === "minimal") {
     return `<section data-profile-target="author" style="margin:30px 20px 14px;border-top:1px solid ${theme.underlineColor};padding-top:16px;">
-  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${leaf(authorText)}</p>
+  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${authorText}</p>
 </section>`;
   }
   return `<section data-profile-target="author" style="margin:28px 20px 14px;background:linear-gradient(135deg,${themeSoft(theme)},#FFFFFF);border:1px solid ${theme.underlineColor};border-radius:14px;padding:16px 18px;">
   <p style="margin:0 0 6px;font-size:11px;font-weight:800;letter-spacing:1.4px;color:${theme.mainColor};">${leaf("ABOUT AUTHOR")}</p>
-  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${leaf(authorText)}</p>
+  <p style="margin:0;font-size:15px;font-weight:800;line-height:1.85;color:#111827;text-align:justify;">${authorText}</p>
 </section>`;
 }
 
@@ -1469,7 +1716,7 @@ function renderCtaBlock(cta, theme) {
   if (state.componentStyle.footer === "ticket") {
     return `<section data-profile-target="cta" style="padding:0 0 32px;">
   <section style="background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;padding:24px 20px;text-align:center;">
-    <p style="font-size:13px;font-weight:700;color:#1a1a1a;margin:0 0 20px;line-height:1.6;">${leaf(cta)}</p>
+    <p style="font-size:13px;font-weight:700;color:#1a1a1a;margin:0 0 20px;line-height:1.6;">${cta}</p>
     <section style="display:flex;justify-content:center;gap:24px;margin-bottom:16px;">
       ${[["♡","点赞","#555"],["◉","在看","#555"],["★","星标",theme.mainColor]].map(([icon, text, color]) => `<section style="text-align:center;color:${color};"><section style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;background:#fff;border:${text === "星标" ? "2px solid " + theme.mainColor : "1px solid #1a1a1a"};">${leaf(icon)}</section><span style="font-size:10px;font-weight:600;">${leaf(text)}</span></section>`).join("")}
     </section>
@@ -1479,23 +1726,23 @@ function renderCtaBlock(cta, theme) {
   }
   if (state.componentStyle.footer === "olive") {
     return `<section data-profile-target="cta" style="margin:0 20px 28px;background:#23251d;color:#f6f2ea;padding:22px 20px;text-align:center;">
-  <p style="font-size:14px;font-weight:900;margin:0 0 10px;line-height:1.8;">${leaf(cta)}</p>
+  <p style="font-size:14px;font-weight:900;margin:0 0 10px;line-height:1.8;">${cta}</p>
   <p style="font-size:10px;color:#ed7b2f;letter-spacing:2px;margin:0;">${leaf("KEEP READING · KEEP MAKING")}</p>
 </section>`;
   }
   if (state.componentStyle.footer === "brand") {
-    return `<section data-profile-target="cta" style="background:linear-gradient(135deg,${theme.mainColor},${themeDeep(theme)});border-radius:18px;padding:30px 22px;text-align:center;box-shadow:0 12px 28px rgba(15,23,42,0.16);margin:0 20px 24px;"><p style="font-size:14px;font-weight:900;color:#FFFFFF;margin:0 0 14px;line-height:1.75;">${leaf(cta)}</p><p style="font-size:10px;color:rgba(255,255,255,0.68);letter-spacing:1.6px;margin:0;">${leaf("LIKE · SHARE · FOLLOW")}</p></section>`;
+    return `<section data-profile-target="cta" style="background:linear-gradient(135deg,${theme.mainColor},${themeDeep(theme)});border-radius:18px;padding:30px 22px;text-align:center;box-shadow:0 12px 28px rgba(15,23,42,0.16);margin:0 20px 24px;"><p style="font-size:14px;font-weight:900;color:#FFFFFF;margin:0 0 14px;line-height:1.75;">${cta}</p><p style="font-size:10px;color:rgba(255,255,255,0.68);letter-spacing:1.6px;margin:0;">${leaf("LIKE · SHARE · FOLLOW")}</p></section>`;
   }
   if (state.componentStyle.footer === "minimal") {
-    return `<section data-profile-target="cta" style="border-top:1px solid ${theme.underlineColor};margin:0 20px 24px;padding-top:18px;text-align:center;"><p style="font-size:13px;font-weight:800;color:#111827;margin:0;line-height:1.8;">${leaf(cta)}</p></section>`;
+    return `<section data-profile-target="cta" style="border-top:1px solid ${theme.underlineColor};margin:0 20px 24px;padding-top:18px;text-align:center;"><p style="font-size:13px;font-weight:800;color:#111827;margin:0;line-height:1.8;">${cta}</p></section>`;
   }
-  return `<section data-profile-target="cta" style="background:radial-gradient(circle at center,#F9FAFB 0%,#FFFFFF 100%);border:1px solid #E5E7EB;border-radius:16px;padding:32px 20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);margin:0 0 24px;"><p style="font-size:13px;font-weight:bold;color:#111827;margin-bottom:20px;line-height:1.6;">${leaf(cta)}</p><p style="font-size:10px;color:#9CA3AF;letter-spacing:1px;margin:0;">${leaf("THANKS FOR READING")}</p></section>`;
+  return `<section data-profile-target="cta" style="background:radial-gradient(circle at center,#F9FAFB 0%,#FFFFFF 100%);border:1px solid #E5E7EB;border-radius:16px;padding:32px 20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);margin:0 0 24px;"><p style="font-size:13px;font-weight:bold;color:#111827;margin-bottom:20px;line-height:1.6;">${cta}</p><p style="font-size:10px;color:#9CA3AF;letter-spacing:1px;margin:0;">${leaf("THANKS FOR READING")}</p></section>`;
 }
 
 function renderHistoryItem(block, theme, historyNo) {
   const title = block.text.replace(/^《|》$/g, "");
   if (state.componentStyle.history === "timeline") {
-    return `<section${previewMark(block)} style="position:relative;margin:0 0 12px;padding-left:28px;">
+    return `<section data-component-target="history"${previewMark(block)} style="position:relative;margin:0 0 12px;padding-left:28px;">
   <span style="position:absolute;left:0;top:5px;width:12px;height:12px;border-radius:999px;background:${theme.mainColor};box-shadow:0 0 0 5px ${themeSoft(theme)};"><span leaf=""><br></span></span>
   <section style="border-left:1px solid ${theme.underlineColor};padding:0 0 12px 14px;">
     <p style="margin:0 0 2px;font-size:10px;font-weight:900;color:${theme.mainColor};letter-spacing:1.5px;">${leaf("READ " + String(historyNo).padStart(2, "0"))}</p>
@@ -1504,7 +1751,7 @@ function renderHistoryItem(block, theme, historyNo) {
 </section>`;
   }
   if (state.componentStyle.history === "ticket") {
-    return `<section${previewMark(block)} style="margin-bottom:12px;background:#fffef8;border:1px solid #1a1a1a;box-shadow:3px 3px 0 #1a1a1a;padding:12px 12px;">
+    return `<section data-component-target="history"${previewMark(block)} style="margin-bottom:12px;background:#fffef8;border:1px solid #1a1a1a;box-shadow:3px 3px 0 #1a1a1a;padding:12px 12px;">
   <section style="display:flex;align-items:center;gap:12px;">
     <span style="display:inline-block;min-width:34px;height:34px;line-height:34px;text-align:center;background:${theme.mainColor};color:#FFFFFF;font-size:12px;font-weight:900;">${leaf(String(historyNo).padStart(2, "0"))}</span>
     <section style="min-width:0;flex:1;">
@@ -1514,7 +1761,7 @@ function renderHistoryItem(block, theme, historyNo) {
   </section>
 </section>`;
   }
-  return `<section${previewMark(block)} style="margin-bottom:12px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid #E5E7EB;border-radius:14px;padding:14px 14px;box-shadow:0 5px 16px rgba(15,23,42,0.05);">
+  return `<section data-component-target="history"${previewMark(block)} style="margin-bottom:12px;background:linear-gradient(135deg,#FFFFFF,${themeSoft(theme)});border:1px solid #E5E7EB;border-radius:14px;padding:14px 14px;box-shadow:0 5px 16px rgba(15,23,42,0.05);">
   <section style="display:flex;gap:12px;align-items:flex-start;">
     <span style="display:inline-block;min-width:34px;height:34px;line-height:34px;text-align:center;border-radius:10px;background:${theme.mainColor};color:#FFFFFF;font-size:12px;font-weight:900;">${leaf(String(historyNo).padStart(2, "0"))}</span>
     <section style="min-width:0;">
@@ -1545,7 +1792,46 @@ function previewMark(block) {
 }
 
 function stripPreviewMarks(html) {
-  return html.replace(/\sdata-preview-(start|end)="\d+"/g, "");
+  return html
+    .replace(/<button[^>]*data-tag-(add|remove)[^>]*>[\s\S]*?<\/button>/g, "")
+    .replace(/\sdata-preview-(start|end)="\d+"/g, "")
+    .replace(/\sdata-inline-edit="[^"]*"/g, "")
+    .replace(/\sdata-emoji-asset="[^"]*"/g, "")
+    .replace(/\sdata-tag-(field|item|value)="?[^"\s>]*"?/g, "")
+    .replace(/\sdata-tag-(item|value)/g, "")
+    .replace(/\scontenteditable="true"/g, "")
+    .replace(/\sspellcheck="false"/g, "")
+    .replace(/\sclass="preview-inline-edit"/g, "");
+}
+
+async function prepareRichCopyHtml(html) {
+  const holder = document.createElement("section");
+  holder.innerHTML = html;
+  const images = Array.from(holder.querySelectorAll("img[data-emoji-asset], img[data-image-asset]"));
+  for (const img of images) {
+    const id = img.getAttribute("data-emoji-asset") || img.getAttribute("data-image-asset");
+    const asset = state.assets[id];
+    if (!asset || asset.unavailable || asset.tinyUnsupported) {
+      img.remove();
+      continue;
+    }
+    if (asset.dataUrl && String(asset.dataUrl).startsWith("data:image/")) {
+      img.setAttribute("src", asset.dataUrl);
+      continue;
+    }
+    if (asset.filePath && window.gzhApp?.readImageFile) {
+      try {
+        const image = await window.gzhApp.readImageFile(asset.filePath);
+        if (image?.dataUrl) {
+          asset.dataUrl = image.dataUrl;
+          img.setAttribute("src", image.dataUrl);
+        }
+      } catch {
+        img.remove();
+      }
+    }
+  }
+  return stripPreviewMarks(holder.innerHTML);
 }
 
 function exportPromoBlock() {
@@ -1606,26 +1892,68 @@ async function currentExportHtml() {
 }
 
 function playPreviewShowcaseScroll() {
-  if (!els.previewWrap || state.mode !== "preview") return;
-  clearTimeout(state.previewShowcaseTimer);
-  const wrap = els.previewWrap;
-  wrap.scrollTo({ top: 0, behavior: "smooth" });
-  state.previewShowcaseTimer = window.setTimeout(() => {
-    const maxTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
-    if (maxTop > 8) wrap.scrollTo({ top: maxTop, behavior: "smooth" });
-  }, 260);
+  scrollPreviewToComponent("cover");
+}
+
+function scrollPreviewToElement(target) {
+  if (!els.previewWrap || !target || state.mode !== "preview") return;
+  const wrapRect = els.previewWrap.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const nextTop = els.previewWrap.scrollTop + targetRect.top - wrapRect.top - Math.max(20, wrapRect.height * 0.12);
+  els.previewWrap.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+}
+
+function scrollPreviewToComponent(key) {
+  const selectors = {
+    cover: '[data-profile-target="cover"]',
+    toc: '[data-component-target="toc"]',
+    chapter: '[data-component-target="chapter"]',
+    quote: '[data-component-target="quote"]',
+    image: '[data-component-target="image"]',
+    footer: '[data-profile-target="cta"], [data-profile-target="author"]',
+    history: '[data-component-target="history"]',
+    body: '[data-component-target="body"]'
+  };
+  if (key === "footer") {
+    scrollPreviewToElement(els.preview?.querySelector('[data-profile-target="cta"]') || els.preview?.querySelector('[data-profile-target="author"]'));
+    return;
+  }
+  const selector = selectors[key] || selectors.cover;
+  const target = els.preview?.querySelector(selector) || els.preview?.querySelector(selectors.cover);
+  scrollPreviewToElement(target);
+}
+
+function componentPreviewTarget(key) {
+  if (key === "cover") return "cover";
+  if (key === "toc") return "toc";
+  if (key === "chapter") return "chapter";
+  if (key === "quote") return "quote";
+  if (key === "image") return "image";
+  if (key === "footer") return "footer";
+  if (key === "history") return "history";
+  return "cover";
+}
+
+function renderArticleAndScroll(target) {
+  renderArticle({ scrollTarget: target, skipPreviewFollow: true });
 }
 
 function replaceEmojiTokens(html) {
   return html.replace(/\{\{emoji:([\w-]+)\}\}/g, (_match, id) => {
     const asset = state.assets[id];
-    const src = asset?.dataUrl || asset?.fileUrl || "";
-    if (!src) return "";
-    return `<img src="${esc(src)}" alt="${esc(asset.name || "表情")}" style="width:22px;height:22px;display:inline-block;vertical-align:-5px;margin:0 2px;border:0;object-fit:contain;">`;
+    if (!asset) return "";
+    return inlineEmojiHtml(asset, false);
   });
 }
 
-function renderArticle() {
+function renderArticle(options = {}) {
+  clearTimeout(state.renderTimer);
+  cancelAnimationFrame(state.renderFrame || 0);
+  state.renderTimer = 0;
+  state.renderFrame = 0;
+  const preservePreviewScroll = Boolean(options.preservePreviewScroll);
+  const skipPreviewFollow = Boolean(options.skipPreviewFollow);
+  const previewScrollTop = preservePreviewScroll && els.previewWrap ? els.previewWrap.scrollTop : 0;
   const theme = state.themes.find((t) => t.id === els.themeSelect.value) || state.themes[0];
   if (!theme) return;
 
@@ -1636,8 +1964,10 @@ function renderArticle() {
   const title = customTitle || titleBlock?.text || "公众号 Markdown 排版";
   const subtitle = els.coverSubtitle ? els.coverSubtitle.value.trim() : (quoteBlock?.text || "");
   const headings = blocks.filter((b) => b.type === "h2").map((b) => b.text);
+  const bodyColor = articleTextColor();
+  const bodyFontSize = state.articleFontSize || 15;
 
-  let html = `<section style="max-width:677px;margin:0 auto;${articleBackgroundStyle(state.previewBackground)}padding:18px 0;font-family:-apple-system,BlinkMacSystemFont,'HarmonyOS Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;color:#334155;line-height:1.78;letter-spacing:0.2px;overflow-x:hidden;">`;
+  let html = `<section style="max-width:677px;margin:0 auto;${articleBackgroundStyle(state.previewBackground)}padding:18px 0;font-family:-apple-system,BlinkMacSystemFont,'HarmonyOS Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;color:${bodyColor};line-height:1.78;letter-spacing:0.2px;overflow-x:hidden;">`;
   html += renderCover(title, subtitle, theme);
   html += renderToc(headings, theme);
 
@@ -1645,6 +1975,8 @@ function renderArticle() {
   let listOpen = false;
   let historySection = false;
   let historyNo = 0;
+  let bodyMarked = false;
+  let imageMarked = false;
   const closeList = () => {
     if (listOpen) {
       html += "</section>";
@@ -1653,7 +1985,7 @@ function renderArticle() {
   };
 
   for (const block of blocks) {
-    if (block.type === "title" || block === quoteBlock) continue;
+    if (block.type === "title") continue;
     if (block.type !== "li") closeList();
 
     if (block.type === "h2") {
@@ -1668,7 +2000,9 @@ function renderArticle() {
       html += renderQuoteBlock(block, theme);
     } else if (block.type === "p") {
       const pad = chapterNo ? "" : "padding:0 20px;";
-      html += `<section${previewMark(block)} style="${pad}"><p style="margin-bottom:17px;font-size:15px;line-height:1.92;text-align:justify;color:#334155;">${inline(block.text, theme)}</p></section>`;
+      const bodyTarget = bodyMarked ? "" : ' data-component-target="body"';
+      bodyMarked = true;
+      html += `<section${bodyTarget}${previewMark(block)} style="${pad}"><p style="margin-bottom:17px;font-size:${bodyFontSize}px;line-height:1.92;text-align:justify;color:${bodyColor};">${inline(block.text, theme)}</p></section>`;
     } else if (block.type === "li") {
       if (!listOpen) {
         html += `<section style="margin:0 20px 24px;">`;
@@ -1678,10 +2012,11 @@ function renderArticle() {
         historyNo += 1;
         html += renderHistoryItem(block, theme, historyNo);
       } else {
-        html += `<section${previewMark(block)} style="margin-bottom:14px;"><p style="margin:0 0 6px;"><span style="display:inline-block;font-size:13px;font-weight:700;color:${theme.mainColor};background:${themeSoft(theme)};padding:3px 10px;border-radius:999px;"><span style="display:inline-block;width:6px;height:6px;background:${theme.mainColor};border-radius:50%;margin-right:5px;vertical-align:middle;"><span leaf=""><br></span></span>${inline(block.text, theme)}</span></p></section>`;
+        html += `<section${previewMark(block)} style="margin-bottom:14px;"><p style="margin:0 0 6px;"><span style="display:inline-block;font-size:${Math.max(13, bodyFontSize - 1)}px;font-weight:700;color:${theme.mainColor};background:${themeSoft(theme)};padding:3px 10px;border-radius:999px;"><span style="display:inline-block;width:6px;height:6px;background:${theme.mainColor};border-radius:50%;margin-right:5px;vertical-align:middle;"><span leaf=""><br></span></span>${inline(block.text, theme)}</span></p></section>`;
       }
     } else if (block.type === "image") {
-      html += renderImageBlock(block, theme, chapterNo);
+      html += renderImageBlock(block, theme, chapterNo, !imageMarked);
+      imageMarked = true;
     } else if (block.type === "code") {
       const rows = block.text.split("\n").map((line) => `<p style="margin:0;font-family:'SF Mono',Consolas,Monaco,monospace;font-size:13px;line-height:1.6;color:#E2E8F0;">${leaf(line.replace(/  /g, "銆€"))}</p>`).join("");
       html += `<section${previewMark(block)} style="margin:0 20px 20px;border-radius:8px;overflow:hidden;background:#1E293B;box-shadow:0 4px 16px -8px rgba(15,23,42,0.4);"><section style="display:flex;align-items:center;padding:9px 14px;background:#0F172A;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#FF5F56;margin-right:7px;font-size:0;line-height:0;overflow:hidden;"><span leaf=""><br></span></span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#FFBD2E;margin-right:7px;font-size:0;line-height:0;overflow:hidden;"><span leaf=""><br></span></span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#27C93F;font-size:0;line-height:0;overflow:hidden;"><span leaf=""><br></span></span><span style="margin-left:12px;font-size:12px;color:#64748B;font-family:Consolas,Monaco,monospace;letter-spacing:1px;">${leaf(block.lang)}</span></section><section style="padding:11px 14px;">${rows}</section></section>`;
@@ -1696,31 +2031,50 @@ function renderArticle() {
   const bio = els.authorBio.value.trim();
   const cta = els.ctaText.value.trim();
   if (author || bio) {
-    const authorText = author && bio ? `我是 ${author}，${bio}。` : author ? `我是 ${author}。` : bio;
+    const authorText = author && bio
+      ? `我是 ${editableLeaf("authorName", author, "作者名")}，${editableLeaf("authorBio", bio, "一句话简介")}。`
+      : author
+        ? `我是 ${editableLeaf("authorName", author, "作者名")}。`
+        : editableLeaf("authorBio", bio, "一句话简介");
     html += renderAuthorBlock(authorText, theme);
   }
   if (cta) {
-    html += renderCtaBlock(cta, theme);
+    html += renderCtaBlock(editableLeaf("ctaText", cta, "互动文案"), theme);
   }
   html += "</section>";
 
   html = replaceEmojiTokens(html);
   state.currentHtml = clipboardHtml(html);
   els.preview.innerHTML = html;
+  if (preservePreviewScroll && els.previewWrap) {
+    els.previewWrap.scrollTop = previewScrollTop;
+  }
   els.htmlOut.textContent = state.currentHtml;
   els.meta.textContent = `${els.source.value.length} 字`;
   els.quality.textContent = `${theme.name} · ${chapterNo || 0} 章 · leaf ${(html.match(/leaf=""/g) || []).length}`;
+  state.lastRenderAt = Date.now();
   scheduleSaveState();
-  if (state.skipNextPreviewFollow) {
+  if (options.scrollTarget) {
+    scrollPreviewToComponent(options.scrollTarget);
+    state.skipNextPreviewFollow = false;
+  } else if (skipPreviewFollow || state.skipNextPreviewFollow) {
     state.skipNextPreviewFollow = false;
   } else {
     schedulePreviewFollow();
   }
 }
 
-function scheduleRenderArticle() {
+function scheduleRenderArticle(options = {}) {
+  clearTimeout(state.renderTimer);
   cancelAnimationFrame(state.renderFrame || 0);
-  state.renderFrame = requestAnimationFrame(renderArticle);
+  const now = Date.now();
+  const maxWait = Number.isFinite(options.maxWait) ? options.maxWait : 420;
+  const baseDelay = Number.isFinite(options.delay) ? options.delay : 45;
+  const due = now - (state.lastRenderAt || 0) >= maxWait;
+  const delay = due ? 0 : baseDelay;
+  state.renderTimer = window.setTimeout(() => {
+    state.renderFrame = requestAnimationFrame(() => renderArticle(options));
+  }, Math.max(0, delay));
 }
 
 function rememberSourceSelection() {
@@ -1783,6 +2137,55 @@ function scrollPreviewToProfileTarget(target) {
   });
 }
 
+function syncInlinePreviewEdit(target) {
+  const field = target?.dataset?.inlineEdit;
+  if (!field) return;
+  const value = target.innerText.replace(/\s+/g, " ").trim();
+  const fieldMap = {
+    articleTitle: els.articleTitle,
+    coverLabel: els.coverLabel,
+    coverSubtitle: els.coverSubtitle,
+    coverMetaEyebrow: els.coverMetaEyebrow,
+    coverMetaFooter: els.coverMetaFooter,
+    coverMetaChips: els.coverMetaChips,
+    coverMetaFooterTags: els.coverMetaFooterTags,
+    authorName: els.authorName,
+    authorBio: els.authorBio,
+    ctaText: els.ctaText
+  };
+  const input = fieldMap[field];
+  if (!input) return;
+  input.value = value;
+  if (field === "articleTitle") syncMarkdownTitleFromField();
+  updateCoverMetaState();
+  state.editedAt = todayStamp();
+  scheduleSaveState();
+}
+
+function updateCoverMetaState() {
+  state.coverMeta = {
+    eyebrow: els.coverMetaEyebrow?.value || "",
+    footer: els.coverMetaFooter?.value || "",
+    chips: els.coverMetaChips?.value || "",
+    footerTags: els.coverMetaFooterTags?.value || ""
+  };
+}
+
+function splitTags(value) {
+  return String(value || "").split(/[·•｜|/，,\s]+/).map((item) => item.trim()).filter(Boolean);
+}
+
+function syncEditableTags(field) {
+  const tags = Array.from(els.preview.querySelectorAll(`[data-tag-field="${field}"] [data-tag-value]`))
+    .map((node) => node.innerText.replace(/[×]/g, "").trim())
+    .filter(Boolean);
+  const input = field === "coverMetaFooterTags" ? els.coverMetaFooterTags : els.coverMetaChips;
+  if (!input) return;
+  input.value = tags.join(" · ");
+  updateCoverMetaState();
+  scheduleSaveState();
+}
+
 function profileTargetForInput(input) {
   if ([
     els.articleTitle,
@@ -1836,11 +2239,18 @@ function insertText(text, options = {}) {
   replaceSourceSelection(text, options);
 }
 
-function insertLine(text) {
+function insertLine(text, options = {}) {
   const range = sourceSelection();
   const before = els.source.value.slice(0, range.start);
   const prefix = before && !before.endsWith("\n") ? "\n\n" : "";
   const insert = prefix + text + "\n\n";
+  if (options.placeCursorAfter) {
+    replaceSourceSelection(insert, {
+      selectStart: insert.length,
+      selectEnd: insert.length
+    });
+    return;
+  }
   const editable = editableSpanInLine(text);
   replaceSourceSelection(insert, {
     selectStart: prefix.length + editable.start,
@@ -1897,6 +2307,7 @@ async function insertImageMarkdown(name, dataUrl, fileUrl = "", filePath = "") {
 async function ensureClipboardImagesCached() {
   let changed = false;
   for (const asset of Object.values(state.assets)) {
+    if (asset?.emojiAsset) continue;
     if (!asset?.dataUrl || asset.fileUrl || !String(asset.dataUrl).startsWith("data:image/")) continue;
     try {
       const cached = await window.gzhApp.cacheImage(asset.name, asset.dataUrl);
@@ -2013,6 +2424,14 @@ function setSyntaxCollapsed(collapsed) {
   }
 }
 
+function setAssetCollapsed(collapsed) {
+  state.assetCollapsed = Boolean(collapsed);
+  els.assetStrip?.classList.toggle("collapsed", state.assetCollapsed);
+  if (els.assetToggle) {
+    els.assetToggle.textContent = state.assetCollapsed ? "展开图片" : "隐藏图片";
+  }
+}
+
 function setSettingsCollapsed(collapsed) {
   state.settingsCollapsed = Boolean(collapsed);
   document.body.classList.toggle("settings-collapsed", state.settingsCollapsed);
@@ -2036,7 +2455,48 @@ function shortcutMatches(event, shortcut) {
   return event.key.toLowerCase() === key;
 }
 
+function insertTextareaText(text, start, end) {
+  els.source.setRangeText(text, start, end, "end");
+  els.source.dispatchEvent(new Event("input", { bubbles: true }));
+  rememberSourceSelection();
+}
+
+function handleListContinuation(event) {
+  if (event.key !== "Enter" || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.isComposing) return false;
+  rememberSourceSelection();
+  const range = sourceSelection();
+  if (range.start !== range.end) return false;
+  const value = els.source.value;
+  const lineStart = value.lastIndexOf("\n", range.start - 1) + 1;
+  const lineEnd = value.indexOf("\n", range.start);
+  const currentEnd = lineEnd === -1 ? value.length : lineEnd;
+  const beforeCursor = value.slice(lineStart, range.start);
+  const afterCursor = value.slice(range.start, currentEnd);
+  if (afterCursor.trim()) return false;
+  const unordered = beforeCursor.match(/^(\s*)([-*+])\s(.*)$/);
+  const ordered = beforeCursor.match(/^(\s*)(\d+)([.)])\s(.*)$/);
+  if (!unordered && !ordered) return false;
+  event.preventDefault();
+  if (unordered) {
+    const [, indent, marker, content] = unordered;
+    if (!content.trim()) {
+      insertTextareaText("", lineStart, range.start);
+      return true;
+    }
+    insertTextareaText(`\n${indent}${marker} `, range.start, range.end);
+    return true;
+  }
+  const [, indent, number, suffix, content] = ordered;
+  if (!content.trim()) {
+    insertTextareaText("", lineStart, range.start);
+    return true;
+  }
+  insertTextareaText(`\n${indent}${Number(number) + 1}${suffix} `, range.start, range.end);
+  return true;
+}
+
 function handleEditorShortcut(event) {
+  if (handleListContinuation(event)) return;
   const action = syntaxActions.find((item) => item.shortcut && shortcutMatches(event, item.shortcut));
   if (!action) return;
   event.preventDefault();
@@ -2105,8 +2565,7 @@ function renderComponentPanel() {
         if (group.key === "cover") updateCoverFieldVisibility();
         if (group.key === "history") ensureHistorySection();
         renderComponentPanel();
-        renderArticle();
-        playPreviewShowcaseScroll();
+        renderArticleAndScroll(componentPreviewTarget(group.key));
         saveState();
       });
       grid.appendChild(btn);
@@ -2127,8 +2586,7 @@ function renderComponentPanel() {
       paletteSel.addEventListener("change", () => {
         state.componentStyle.tocPalette = paletteSel.value;
         renderComponentPanel();
-        renderArticle();
-        playPreviewShowcaseScroll();
+        renderArticleAndScroll("toc");
         saveState();
       });
       section.appendChild(tocMeta);
@@ -2147,6 +2605,7 @@ function setMode(mode) {
   document.getElementById("htmlTab")?.classList.toggle("active", mode === "html");
   document.getElementById("templatesTab").classList.toggle("active", mode === "templates");
   els.emojiTab?.classList.toggle("active", mode === "emojis");
+  if (mode === "templates") refreshArticleDrafts().then(renderDraftPanel);
 }
 
 function isOnline() {
@@ -2210,6 +2669,24 @@ function setBackgroundTune(color = "#94a3b8", strength = 18) {
   if (els.backgroundStrengthValue) els.backgroundStrengthValue.textContent = `${state.backgroundStrength}%`;
 }
 
+function articleTextColor() {
+  const tone = Math.max(42, Math.min(88, Number(state.articleTextTone) || 68));
+  const r = Math.round(102 - (tone - 42) * 1.25);
+  const g = Math.round(116 - (tone - 42) * 1.1);
+  const b = Math.round(139 - (tone - 42) * 0.95);
+  return `rgb(${Math.max(15, r)},${Math.max(23, g)},${Math.max(42, b)})`;
+}
+
+function setTypographyTune(fontSize = 15, tone = 68) {
+  state.articleFontSize = Math.max(13, Math.min(19, Number(fontSize) || 15));
+  state.articleTextTone = Math.max(42, Math.min(88, Number(tone) || 68));
+  if (els.articleFontSize) els.articleFontSize.value = String(state.articleFontSize);
+  if (els.articleFontSizeValue) els.articleFontSizeValue.textContent = `${state.articleFontSize}px`;
+  if (els.articleTextTone) els.articleTextTone.value = String(state.articleTextTone);
+  if (els.articleTextToneValue) els.articleTextToneValue.textContent = `${state.articleTextTone}%`;
+  document.documentElement.style.setProperty("--editor-font-size", `${Math.max(14, state.articleFontSize - 1)}px`);
+}
+
 function populateTemplates() {
   if (!els.templateFileSelect) return;
   els.templateFileSelect.innerHTML = "";
@@ -2239,6 +2716,432 @@ function renderTemplatePanel() {
   els.templateContent.textContent = content;
 }
 
+function readArticleDrafts() {
+  return Array.isArray(state.drafts) ? state.drafts : [];
+}
+
+async function refreshArticleDrafts() {
+  try {
+    if (!window.gzhApp?.listDrafts) {
+      state.drafts = JSON.parse(localStorage.getItem(articleDraftKey) || "[]");
+      return state.drafts;
+    }
+    let result = await window.gzhApp.listDrafts();
+    let drafts = Array.isArray(result?.drafts) ? result.drafts : [];
+    const legacyDrafts = JSON.parse(localStorage.getItem(articleDraftKey) || "[]");
+    if (!drafts.length && Array.isArray(legacyDrafts) && legacyDrafts.length && window.gzhApp?.saveDraft) {
+      for (const draft of legacyDrafts) await window.gzhApp.saveDraft(draft);
+      localStorage.removeItem(articleDraftKey);
+      result = await window.gzhApp.listDrafts();
+      drafts = Array.isArray(result?.drafts) ? result.drafts : [];
+    }
+    state.drafts = drafts;
+    state.draftsDir = result?.dir || "";
+    state.draftPathReady = Boolean(result?.hasCustomDir);
+    return state.drafts;
+  } catch (error) {
+    console.warn("load drafts failed", error);
+    state.drafts = [];
+    return state.drafts;
+  }
+}
+
+function draftAssetsSnapshot() {
+  return Object.fromEntries(Object.entries(state.assets).map(([id, asset]) => [id, {
+    ...asset,
+    dataUrl: asset.fileUrl || asset.emojiAsset ? "" : asset.dataUrl
+  }]));
+}
+
+function draftTitleFromSource(source) {
+  const match = source.match(/^#\s+(.+)$/m);
+  return match ? match[1].trim() : "";
+}
+
+function draftTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "刚刚";
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function draftExcerptFromSource(source) {
+  return String(source || "")
+    .replace(/^#\s+.+$/gm, "")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "[图片]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+}
+
+function currentDraftPayload(titleOverride = "", options = {}) {
+  const source = els.source.value;
+  const title = (titleOverride || "未命名文章").trim();
+  const excerpt = draftExcerptFromSource(source);
+  return {
+    id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title,
+    kind: options.kind || "manual",
+    interval: options.interval || "manual",
+    excerpt,
+    source,
+    theme: els.themeSelect.value,
+    profile: profileFields(),
+    coverRightImage: state.coverRightImage || "",
+    assets: draftAssetsSnapshot(),
+    previewBackground: state.previewBackground,
+    backgroundColor: state.backgroundColor,
+    backgroundStrength: state.backgroundStrength,
+    articleFontSize: state.articleFontSize,
+    articleTextTone: state.articleTextTone,
+    componentStyle: state.componentStyle,
+    mockup: document.querySelector(".mockup-btn.active")?.dataset.mode || "default",
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function showDraftTitleDialog(defaultTitle = "") {
+  if (!els.draftTitleDialog || !els.draftTitleInput) return Promise.resolve(defaultTitle || "");
+  els.draftTitleInput.value = defaultTitle || "";
+  els.draftTitleDialog.classList.add("show");
+  els.draftTitleDialog.setAttribute("aria-hidden", "false");
+  window.setTimeout(() => {
+    els.draftTitleInput.focus();
+    els.draftTitleInput.select();
+  }, 50);
+  return new Promise((resolve) => {
+    state.draftPromptResolve = resolve;
+  });
+}
+
+function closeDraftTitleDialog(value = "") {
+  els.draftTitleDialog?.classList.remove("show");
+  els.draftTitleDialog?.setAttribute("aria-hidden", "true");
+  const resolve = state.draftPromptResolve;
+  state.draftPromptResolve = null;
+  if (resolve) resolve(value);
+}
+
+function showDraftDeleteDialog(draft) {
+  if (!els.draftDeleteDialog) return Promise.resolve(window.confirm(`确定删除草稿「${draft.title || "未命名文章"}」吗？`));
+  if (els.draftDeleteText) {
+    els.draftDeleteText.textContent = `将删除「${draft.title || "未命名文章"}」这篇暂存文章，并移除对应的草稿 JSON 文件。`;
+  }
+  els.draftDeleteDialog.classList.add("show");
+  els.draftDeleteDialog.setAttribute("aria-hidden", "false");
+  return new Promise((resolve) => {
+    state.draftDeleteResolve = resolve;
+  });
+}
+
+function closeDraftDeleteDialog(value = false) {
+  els.draftDeleteDialog?.classList.remove("show");
+  els.draftDeleteDialog?.setAttribute("aria-hidden", "true");
+  const resolve = state.draftDeleteResolve;
+  state.draftDeleteResolve = null;
+  if (resolve) resolve(Boolean(value));
+}
+
+function showDraftResumeDialog(title) {
+  if (!els.draftResumeDialog) return Promise.resolve(false);
+  if (els.draftResumeText) {
+    els.draftResumeText.textContent = `是否继续使用「${title || "未命名文章"}」这个保存名称开启实时保存？`;
+  }
+  els.draftResumeDialog.classList.add("show");
+  els.draftResumeDialog.setAttribute("aria-hidden", "false");
+  return new Promise((resolve) => {
+    state.draftResumeResolve = resolve;
+  });
+}
+
+function closeDraftResumeDialog(value = false) {
+  els.draftResumeDialog?.classList.remove("show");
+  els.draftResumeDialog?.setAttribute("aria-hidden", "true");
+  const resolve = state.draftResumeResolve;
+  state.draftResumeResolve = null;
+  if (resolve) resolve(Boolean(value));
+}
+
+async function ensureDraftPathReady() {
+  if (state.draftPathReady) return true;
+  const result = await window.gzhApp?.pickDraftDir?.();
+  if (!result || result.canceled) {
+    els.status.textContent = "已取消，请先选择草稿保存路径";
+    return false;
+  }
+  state.draftsDir = result.dir || "";
+  state.draftPathReady = true;
+  return true;
+}
+
+function updateRealtimeSaveUi() {
+  els.draftSaveLight?.classList.toggle("on", state.realtimeSaveEnabled);
+  els.draftSaveLight?.classList.toggle("off", !state.realtimeSaveEnabled);
+  if (els.draftSaveLight) {
+    els.draftSaveLight.title = state.realtimeSaveEnabled
+      ? `实时保存已开启：${state.realtimeDraftTitle || "未命名文章"}`
+      : "实时保存未开启";
+  }
+  if (els.saveDraftBtn) els.saveDraftBtn.textContent = state.realtimeSaveEnabled ? "关闭保存" : "实时保存";
+  if (els.draftPanelSaveBtn) els.draftPanelSaveBtn.textContent = state.realtimeSaveEnabled ? "关闭实时保存" : "开启实时保存";
+}
+
+async function setupRealtimeSave({ forceNewTitle = false } = {}) {
+  if (!(await ensureDraftPathReady())) return "";
+  let titleSeed = state.realtimeDraftTitle || "";
+  if (!forceNewTitle && state.realtimeDraftTitle) {
+    const useSame = await showDraftResumeDialog(state.realtimeDraftTitle);
+    if (useSame) return state.realtimeDraftTitle;
+    titleSeed = "";
+  }
+  const title = (await showDraftTitleDialog(titleSeed)).trim();
+  if (!title) {
+    els.status.textContent = "已取消实时保存，请手动输入文章保存名称";
+    return "";
+  }
+  return title;
+}
+
+async function saveManualDraft() {
+  if (!els.source.value.trim()) {
+    els.status.textContent = "当前文章为空，先写一点内容再暂存";
+    return;
+  }
+  if (!(await ensureDraftPathReady())) return;
+  const title = (await showDraftTitleDialog("")).trim();
+  if (!title) {
+    els.status.textContent = "已取消暂存，请输入暂存文章名称";
+    return;
+  }
+  await persistCurrentDraft(title, { kind: "manual", interval: "manual" });
+}
+
+async function persistCurrentDraft(title, { silent = false, kind = "manual", interval = "manual" } = {}) {
+  const draft = currentDraftPayload(title, { kind, interval });
+  if (window.gzhApp?.saveDraft) {
+    await window.gzhApp.saveDraft(draft);
+    await refreshArticleDrafts();
+  } else {
+    const drafts = readArticleDrafts().filter((item) => `${item.title}|${item.kind}|${item.interval}` !== `${draft.title}|${draft.kind}|${draft.interval}`);
+    drafts.unshift(draft);
+    state.drafts = drafts.slice(0, 80);
+    localStorage.setItem(articleDraftKey, JSON.stringify(state.drafts));
+  }
+  renderDraftPanel();
+  if (!silent) {
+    setMode("templates");
+    els.status.textContent = `已暂存文章：${draft.title}`;
+  }
+}
+
+async function saveCurrentDraft() {
+  if (!els.source.value.trim()) {
+    els.status.textContent = "当前文章为空，先写一点内容再开启实时保存";
+    return;
+  }
+  if (state.realtimeSaveEnabled) {
+    state.realtimeSaveEnabled = false;
+    updateRealtimeSaveUi();
+    els.status.textContent = "实时保存已关闭";
+    return;
+  }
+  const title = await setupRealtimeSave();
+  if (!title) return;
+  state.realtimeDraftTitle = title;
+  state.realtimeSaveEnabled = true;
+  state.realtimeLastSavedAt = { "1m": 0, "5m": 0, "10m": 0 };
+  updateRealtimeSaveUi();
+  await persistCurrentDraft(title, { kind: "realtime", interval: "1m" });
+}
+
+function applyDraftProfile(profile = {}) {
+  els.articleTitle.value = profile.articleTitle || "";
+  els.coverLabel.value = profile.coverLabel || "";
+  els.coverSubtitle.value = profile.coverSubtitle || "";
+  state.coverMeta = { ...state.coverMeta, ...(profile.coverMeta || {}) };
+  if (els.coverMetaEyebrow) els.coverMetaEyebrow.value = state.coverMeta.eyebrow || "";
+  if (els.coverMetaFooter) els.coverMetaFooter.value = state.coverMeta.footer || "";
+  if (els.coverMetaChips) els.coverMetaChips.value = state.coverMeta.chips || "";
+  if (els.coverMetaFooterTags) els.coverMetaFooterTags.value = state.coverMeta.footerTags || "";
+  els.authorName.value = profile.authorName || "";
+  els.authorBio.value = profile.authorBio || "";
+  els.ctaText.value = profile.ctaText || "";
+}
+
+function loadArticleDraft(id) {
+  const draft = readArticleDrafts().find((item) => item.id === id);
+  if (!draft) return;
+  els.source.value = draft.source || "";
+  if (draft.theme) els.themeSelect.value = draft.theme;
+  applyDraftProfile(draft.profile || {});
+  state.coverRightImage = draft.coverRightImage || "";
+  state.assets = draft.assets || {};
+  state.componentStyle = normalizeComponentStyle(draft.componentStyle);
+  state.componentStyle.tocPalette = draft.componentStyle?.tocPalette || state.componentStyle.tocPalette || "single";
+  setPreviewBackground(draft.previewBackground || "none");
+  setBackgroundTune(draft.backgroundColor || "#94a3b8", draft.backgroundStrength || 18);
+  setTypographyTune(draft.articleFontSize || 15, draft.articleTextTone || 68);
+  setMockup(draft.mockup || "default");
+  renderAssets();
+  renderComponentPanel();
+  updateThemeMeta();
+  syncArticleTitleFromMarkdown();
+  state.realtimeDraftTitle = draft.title || "";
+  state.realtimeSaveEnabled = Boolean(state.realtimeDraftTitle);
+  state.draftPathReady = true;
+  updateRealtimeSaveUi();
+  renderArticle();
+  saveState();
+  setMode("preview");
+  els.status.textContent = `已载入草稿并开启实时保存：${draft.title || "未命名文章"}`;
+}
+
+async function deleteArticleDraft(id) {
+  const drafts = readArticleDrafts();
+  const draft = drafts.find((item) => item.id === id);
+  if (!draft) return;
+  if (!(await showDraftDeleteDialog(draft))) return;
+  if (window.gzhApp?.deleteDraft) {
+    await window.gzhApp.deleteDraft(id);
+    await refreshArticleDrafts();
+  } else {
+    state.drafts = drafts.filter((item) => item.id !== id);
+    localStorage.setItem(articleDraftKey, JSON.stringify(state.drafts));
+  }
+  renderDraftPanel();
+  els.status.textContent = "已删除草稿";
+}
+
+async function chooseDraftPath() {
+  if (!window.gzhApp?.pickDraftDir) return;
+  const result = await window.gzhApp.pickDraftDir();
+  if (result?.canceled) return;
+  await refreshArticleDrafts();
+  renderDraftPanel();
+  state.draftPathReady = true;
+  els.status.textContent = `草稿保存路径已更新：${result.dir || state.draftsDir || ""}`;
+}
+
+async function autoSaveCurrentDraft() {
+  if (!state.realtimeSaveEnabled) return;
+  if (!state.draftPathReady) return;
+  if (!els.source.value.trim()) return;
+  const title = (state.realtimeDraftTitle || "").trim();
+  if (!title) return;
+  try {
+    const now = Date.now();
+    const plans = [
+      ["1m", 60 * 1000],
+      ["5m", 5 * 60 * 1000],
+      ["10m", 10 * 60 * 1000]
+    ];
+    const saved = [];
+    for (const [interval, delay] of plans) {
+      if (!state.realtimeLastSavedAt[interval] || now - state.realtimeLastSavedAt[interval] >= delay) {
+        await persistCurrentDraft(title, { silent: true, kind: "realtime", interval });
+        state.realtimeLastSavedAt[interval] = now;
+        saved.push(interval);
+      }
+    }
+    if (saved.length) els.status.textContent = `已实时保存 ${saved.join(" / ")}：${title}`;
+  } catch (error) {
+    console.warn("auto save draft failed", error);
+  }
+}
+
+function startDraftAutoSave() {
+  if (state.draftAutoSaveTimer) window.clearInterval(state.draftAutoSaveTimer);
+  state.draftAutoSaveTimer = window.setInterval(autoSaveCurrentDraft, 60 * 1000);
+}
+
+function draftVersionLabel(draft) {
+  if (draft.kind === "realtime") {
+    if (draft.interval === "10m") return "实时保存 · 10分钟";
+    if (draft.interval === "5m") return "实时保存 · 5分钟";
+    return "实时保存 · 1分钟";
+  }
+  return "暂存文章";
+}
+
+function groupDraftsByTitle(drafts) {
+  const map = new Map();
+  for (const draft of drafts) {
+    const title = draft.title || "未命名文章";
+    if (!map.has(title)) map.set(title, []);
+    map.get(title).push(draft);
+  }
+  return Array.from(map.entries()).map(([title, items]) => {
+    const sorted = items.slice().sort((a, b) => {
+      const order = { manual: 0, "1m": 1, "5m": 2, "10m": 3 };
+      const keyA = a.kind === "manual" ? "manual" : a.interval || "1m";
+      const keyB = b.kind === "manual" ? "manual" : b.interval || "1m";
+      return (order[keyA] ?? 9) - (order[keyB] ?? 9);
+    });
+    const latest = items.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
+    return {
+      title,
+      items: sorted,
+      latestLabel: `最近保存：${draftTimeLabel(latest?.updatedAt)}`,
+      excerpt: state.realtimeSaveEnabled && title === state.realtimeDraftTitle
+        ? draftExcerptFromSource(els.source.value)
+        : (latest?.excerpt || sorted[0]?.excerpt || "")
+    };
+  }).sort((a, b) => {
+    const timeA = a.items.map((item) => item.updatedAt).sort().at(-1) || "";
+    const timeB = b.items.map((item) => item.updatedAt).sort().at(-1) || "";
+    return String(timeB).localeCompare(String(timeA));
+  });
+}
+
+function renderDraftPanel() {
+  if (!els.draftList || !els.draftSummary) return;
+  const query = (els.draftSearch?.value || "").trim().toLowerCase();
+  const drafts = readArticleDrafts();
+  const filtered = query
+    ? drafts.filter((draft) => `${draft.title || ""} ${draft.excerpt || ""} ${draft.source || ""}`.toLowerCase().includes(query))
+    : drafts;
+  const groups = groupDraftsByTitle(filtered);
+  els.draftSummary.textContent = `${groupDraftsByTitle(drafts).length} 篇文章${query ? ` · 命中 ${groups.length} 篇` : ""}`;
+  if (!filtered.length) {
+    els.draftList.innerHTML = `
+      <section class="draft-empty">
+        <strong>${drafts.length ? "没有匹配的草稿" : "还没有暂存文章"}</strong>
+        <span>${drafts.length ? "换个关键词试试。" : "点击上方“文章暂存”，当前内容就会出现在这里。"}</span>
+      </section>
+    `;
+    return;
+  }
+  els.draftList.innerHTML = groups.map((group) => `
+    <article class="draft-card draft-book-row ${state.realtimeSaveEnabled && group.title === state.realtimeDraftTitle ? "active-realtime" : ""}">
+      <div class="draft-book-title">
+        <span class="draft-card-kicker">${esc(group.latestLabel)}</span>
+        <strong>${esc(group.title)}</strong>
+        <span class="draft-preview">${esc(group.excerpt || "这篇草稿暂时没有正文摘要。")}</span>
+      </div>
+      <div class="draft-version-shelf">
+        ${group.items.map((draft) => `
+          <section class="draft-version ${draft.kind === "realtime" ? "realtime" : "manual"} slot-${esc(draft.interval || "manual")}">
+            <button type="button" data-draft-open="${esc(draft.id)}">
+              <b>${esc(draftVersionLabel(draft))}</b>
+              <small>${draftTimeLabel(draft.updatedAt)}</small>
+            </button>
+            <button class="draft-version-delete" type="button" data-draft-delete="${esc(draft.id)}">删除</button>
+          </section>
+        `).join("")}
+      </div>
+    </article>
+  `).join("");
+  els.draftList.querySelectorAll("[data-draft-open]").forEach((btn) => {
+    btn.addEventListener("click", () => loadArticleDraft(btn.dataset.draftOpen));
+  });
+  els.draftList.querySelectorAll("[data-draft-delete]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteArticleDraft(btn.dataset.draftDelete);
+    });
+  });
+}
+
 function updateThemeMeta() {
   let theme = state.themes.find((t) => t.id === els.themeSelect.value);
   if (!theme && state.themes[0]) {
@@ -2255,7 +3158,7 @@ function saveState() {
   clearTimeout(state.saveTimer);
   const lightweightAssets = Object.fromEntries(Object.entries(state.assets).map(([id, asset]) => [id, {
     ...asset,
-    dataUrl: asset.fileUrl ? "" : asset.dataUrl
+    dataUrl: asset.fileUrl || asset.emojiAsset ? "" : asset.dataUrl
   }]));
   const lightweightEmojis = state.emojis.map((emoji) => ({
     ...emoji,
@@ -2279,9 +3182,13 @@ function saveState() {
     previewBackground: state.previewBackground,
     backgroundColor: state.backgroundColor,
     backgroundStrength: state.backgroundStrength,
+    articleFontSize: state.articleFontSize,
+    articleTextTone: state.articleTextTone,
     componentStyle: state.componentStyle,
     componentCollapsed: state.componentCollapsed,
+    profileCollapsed: state.profileCollapsed,
     syntaxCollapsed: state.syntaxCollapsed,
+    assetCollapsed: state.assetCollapsed,
     settingsCollapsed: state.settingsCollapsed,
     editedAt: state.editedAt
   };
@@ -2316,10 +3223,13 @@ function loadState() {
     setMockup(data.mockup || "default");
     setPreviewBackground(data.previewBackground || "none");
     setBackgroundTune(data.backgroundColor || "#94a3b8", data.backgroundStrength || 18);
+    setTypographyTune(data.articleFontSize || 15, data.articleTextTone || 68);
     state.componentStyle = normalizeComponentStyle(data.componentStyle);
     state.componentStyle.tocPalette = data.componentStyle?.tocPalette || "single";
     setComponentCollapsed(Boolean(data.componentCollapsed));
+    setProfileCollapsed(Boolean(data.profileCollapsed));
     setSyntaxCollapsed(data.syntaxCollapsed || false);
+    setAssetCollapsed(true);
     setSettingsCollapsed(true);
     return true;
   } catch {
@@ -2330,6 +3240,9 @@ function loadState() {
 async function init() {
   els.status.textContent = "正在启动宝藏排版器...";
   setSettingsCollapsed(true);
+  setupProfileCollapsePanel();
+  setProfileCollapsed(state.profileCollapsed);
+  setTypographyTune(state.articleFontSize, state.articleTextTone);
   const startupSource = els.source.value;
   const shouldLoadFullSample = !startupSource.trim() || /## 01 快速开始/.test(startupSource);
   if (!shouldLoadFullSample) els.source.value = startupSource;
@@ -2338,6 +3251,10 @@ async function init() {
   renderSyntaxBar();
   setThemeOptions(quickStartThemes);
   renderAssets();
+  setAssetCollapsed(state.assetCollapsed);
+  refreshArticleDrafts().then(renderDraftPanel);
+  updateRealtimeSaveUi();
+  startDraftAutoSave();
   setComponentCollapsed(state.componentCollapsed);
   renderComponentPanel();
   renderComponentPresets("__default");
@@ -2436,20 +3353,58 @@ document.querySelectorAll(".mockup-btn").forEach((btn) => {
 document.querySelectorAll(".bg-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     setPreviewBackground(btn.dataset.bg);
-    renderArticle();
+    renderArticleAndScroll("body");
   });
 });
 els.backgroundColor?.addEventListener("input", () => {
   setBackgroundTune(els.backgroundColor.value, state.backgroundStrength);
-  scheduleRenderArticle();
+  scheduleRenderArticle({ scrollTarget: "body", skipPreviewFollow: true, delay: 20, maxWait: 120 });
 });
 els.backgroundStrength?.addEventListener("input", () => {
   setBackgroundTune(state.backgroundColor, els.backgroundStrength.value);
-  scheduleRenderArticle();
+  scheduleRenderArticle({ scrollTarget: "body", skipPreviewFollow: true, delay: 20, maxWait: 120 });
+});
+els.articleFontSize?.addEventListener("input", () => {
+  setTypographyTune(els.articleFontSize.value, state.articleTextTone);
+  scheduleRenderArticle({ scrollTarget: "body", skipPreviewFollow: true, delay: 20, maxWait: 120 });
+  scheduleSaveState();
+});
+els.articleTextTone?.addEventListener("input", () => {
+  setTypographyTune(state.articleFontSize, els.articleTextTone.value);
+  scheduleRenderArticle({ scrollTarget: "body", skipPreviewFollow: true, delay: 20, maxWait: 120 });
+  scheduleSaveState();
 });
 els.syntaxToggle?.addEventListener("click", () => {
   setSyntaxCollapsed(!state.syntaxCollapsed);
   saveState();
+});
+els.assetToggle?.addEventListener("click", () => {
+  setAssetCollapsed(!state.assetCollapsed);
+  saveState();
+});
+els.manualDraftBtn?.addEventListener("click", saveManualDraft);
+els.saveDraftBtn?.addEventListener("click", saveCurrentDraft);
+els.draftPanelSaveBtn?.addEventListener("click", saveCurrentDraft);
+els.draftSearch?.addEventListener("input", renderDraftPanel);
+els.draftPathBtn?.addEventListener("click", chooseDraftPath);
+els.draftTitleCancel?.addEventListener("click", () => closeDraftTitleDialog(""));
+els.draftTitleConfirm?.addEventListener("click", () => closeDraftTitleDialog(els.draftTitleInput?.value || ""));
+els.draftTitleInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") closeDraftTitleDialog(els.draftTitleInput?.value || "");
+  if (event.key === "Escape") closeDraftTitleDialog("");
+});
+els.draftTitleDialog?.addEventListener("click", (event) => {
+  if (event.target === els.draftTitleDialog) closeDraftTitleDialog("");
+});
+els.draftDeleteCancel?.addEventListener("click", () => closeDraftDeleteDialog(false));
+els.draftDeleteConfirm?.addEventListener("click", () => closeDraftDeleteDialog(true));
+els.draftDeleteDialog?.addEventListener("click", (event) => {
+  if (event.target === els.draftDeleteDialog) closeDraftDeleteDialog(false);
+});
+els.draftResumeNo?.addEventListener("click", () => closeDraftResumeDialog(false));
+els.draftResumeYes?.addEventListener("click", () => closeDraftResumeDialog(true));
+els.draftResumeDialog?.addEventListener("click", (event) => {
+  if (event.target === els.draftResumeDialog) closeDraftResumeDialog(false);
 });
 document.getElementById("sampleBtn").addEventListener("click", async () => {
   els.source.value = markdownSample;
@@ -2467,7 +3422,8 @@ document.getElementById("copyHtmlBtn").addEventListener("click", async () => {
 document.getElementById("copyRichBtn").addEventListener("click", async () => {
   if (await importLocalMarkdownImages()) renderArticle();
   await ensureClipboardImagesCached();
-  const copiedFromDom = copyRichFromDom(stripPreviewMarks(els.preview.innerHTML));
+  const richHtml = await prepareRichCopyHtml(els.preview.innerHTML);
+  const copiedFromDom = copyRichFromDom(richHtml);
   if (!copiedFromDom) {
     await window.gzhApp.writeHtml(state.currentHtml, els.preview.innerText, primaryClipboardImagePath());
   }
@@ -2494,7 +3450,7 @@ document.addEventListener("click", (event) => {
 });
 els.source.addEventListener("paste", handlePaste);
 els.source.addEventListener("keydown", handleEditorShortcut);
-["click", "keyup", "select", "focus", "input"].forEach((eventName) => {
+["click", "keyup", "select", "focus"].forEach((eventName) => {
   els.source.addEventListener(eventName, () => {
     rememberSourceSelection();
     schedulePreviewFollow();
@@ -2558,6 +3514,21 @@ els.componentPresetSelect?.addEventListener("change", () => {
 els.preview?.addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+  const addBtn = target.closest("[data-tag-add]");
+  if (addBtn) {
+    const field = addBtn.dataset.tagAdd;
+    addBtn.insertAdjacentHTML("beforebegin", `<span data-tag-item style="display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:999px;background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;font-size:11px;font-weight:800;line-height:1;"><span data-tag-value contenteditable="true" spellcheck="false">${leaf("新标签")}</span><button data-tag-remove type="button" style="border:0;background:transparent;color:#059669;font-size:12px;font-weight:900;cursor:pointer;padding:0;">×</button></span>`);
+    if (field) syncEditableTags(field);
+    addBtn.previousElementSibling?.querySelector("[data-tag-value]")?.focus();
+    return;
+  }
+  const removeBtn = target.closest("[data-tag-remove]");
+  if (removeBtn) {
+    const field = removeBtn.closest("[data-tag-field]")?.dataset.tagField;
+    removeBtn.closest("[data-tag-item]")?.remove();
+    if (field) syncEditableTags(field);
+    return;
+  }
   if (!target.closest("[data-cover-right-image]")) return;
   const image = await window.gzhApp.pickImage();
   if (!image?.dataUrl) return;
@@ -2565,6 +3536,24 @@ els.preview?.addEventListener("click", async (event) => {
   renderArticle();
   saveState();
 });
+els.preview?.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const editable = target.closest("[data-inline-edit]");
+  if (editable) syncInlinePreviewEdit(editable);
+  const tagValue = target.closest("[data-tag-value]");
+  if (tagValue) {
+    const field = tagValue.closest("[data-tag-field]")?.dataset.tagField;
+    if (field) syncEditableTags(field);
+  }
+});
+els.preview?.addEventListener("blur", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.closest("[data-inline-edit]") || target.closest("[data-tag-value]")) {
+    renderArticle({ preservePreviewScroll: true, skipPreviewFollow: true });
+  }
+}, true);
 els.profilePresetSelect?.addEventListener("change", () => {
   const name = els.profilePresetSelect.value;
   if (name === "__default") {
@@ -2601,9 +3590,22 @@ function handleArticleEdit(event) {
   if (event?.target === els.articleTitle) {
     syncMarkdownTitleFromField();
   } else if (event?.target === els.source) {
-    syncArticleTitleFromMarkdown();
+    const sourceHead = els.source.value.slice(0, 260);
+    if (!els.articleTitle.value.trim() || /^#\s+/.test(sourceHead)) {
+      syncArticleTitleFromMarkdown();
+    }
   }
   state.editedAt = todayStamp();
+  if (event?.target === els.source) {
+    const len = els.source.value.length;
+    const options = len > 50000
+      ? { delay: 95, maxWait: 900 }
+      : len > 20000
+        ? { delay: 70, maxWait: 700 }
+        : { delay: 35, maxWait: 420 };
+    scheduleRenderArticle(options);
+    return;
+  }
   renderArticle();
   if (profileTarget) scrollPreviewToProfileTarget(profileTarget);
 }

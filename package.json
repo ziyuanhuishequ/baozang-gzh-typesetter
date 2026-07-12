@@ -1,6 +1,6 @@
 {
   "name": "gzh-design-live-preview",
-  "version": "3.4.0",
+  "version": "3.7.0",
   "private": false,
   "author": "清喜",
   "license": "AGPL-3.0-or-later",
@@ -21,6 +21,7 @@
     },
     "files": [
       "src/**/*",
+      "build/app-icon.ico",
       "package.json"
     ],
     "extraResources": [

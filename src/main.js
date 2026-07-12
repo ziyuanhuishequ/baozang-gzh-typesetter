@@ -2,14 +2,23 @@
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { Tray } = require("electron");
 
 const isDev = !app.isPackaged;
 const safeUserData = path.join(process.env.APPDATA || app.getPath("home"), "BaozangTypesetter");
 app.setPath("userData", safeUserData);
 app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
 app.commandLine.appendSwitch("disable-http-cache");
+app.commandLine.appendSwitch("disable-background-networking");
+app.commandLine.appendSwitch("disable-component-update");
+app.commandLine.appendSwitch("disable-domain-reliability");
+app.commandLine.appendSwitch("disable-sync");
+app.commandLine.appendSwitch("log-level", "3");
+app.commandLine.appendSwitch("disable-logging");
 
 let mainWindow = null;
+let tray = null;
+let isQuitting = false;
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -173,8 +182,44 @@ function loadSkillData() {
   return skillDataCache;
 }
 
+function appIconPath() {
+  const icoPath = path.join(__dirname, "..", "build", "app-icon.ico");
+  if (fs.existsSync(icoPath)) return icoPath;
+  return path.join(__dirname, "renderer", "assets", "app-icon.svg");
+}
+
+function showMainWindow() {
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray() {
+  if (tray) return tray;
+  tray = new Tray(nativeImage.createFromPath(appIconPath()));
+  tray.setToolTip("宝藏排版器");
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "显示窗口", click: showMainWindow },
+    { type: "separator" },
+    {
+      label: "退出软件",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]));
+  tray.on("click", showMainWindow);
+  tray.on("double-click", showMainWindow);
+  return tray;
+}
+
 function createWindow() {
-  const iconPath = path.join(__dirname, "renderer", "assets", "app-icon.svg");
+  const iconPath = appIconPath();
   const win = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -192,6 +237,12 @@ function createWindow() {
   });
 
   mainWindow = win;
+  win.on("close", (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      win.hide();
+    }
+  });
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });
@@ -211,6 +262,139 @@ function sanitizeFileName(name) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 120) || "bao-zang-pai-ban-qi";
+}
+
+function articleDraftsDir() {
+  const config = readDraftConfig();
+  return config.dir || path.join(app.getPath("documents"), "宝藏排版器", "草稿文章");
+}
+
+function hasCustomDraftsDir() {
+  return Boolean(readDraftConfig().dir);
+}
+
+function draftConfigPath() {
+  return path.join(app.getPath("userData"), "draft-config.json");
+}
+
+function readDraftConfig() {
+  try {
+    const data = JSON.parse(fs.readFileSync(draftConfigPath(), "utf8"));
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDraftConfig(config) {
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
+  fs.writeFileSync(draftConfigPath(), JSON.stringify(config, null, 2), "utf8");
+}
+
+function draftFileName(draft) {
+  const id = String(draft?.id || `draft-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, "-");
+  const title = sanitizeFileName(draft?.title || "未命名文章").slice(0, 80);
+  return `${title}-${id}.json`;
+}
+
+function normalizeDraft(raw, filePath = "") {
+  if (!raw || typeof raw !== "object") return null;
+  const id = String(raw.id || path.basename(filePath, ".json") || `draft-${Date.now()}`);
+  return {
+    ...raw,
+    id,
+    title: String(raw.title || "未命名文章"),
+    updatedAt: raw.updatedAt || new Date().toISOString(),
+    filePath
+  };
+}
+
+function draftTitleKey(title) {
+  return String(title || "未命名文章").trim().toLowerCase();
+}
+
+function draftSaveKey(draft) {
+  return [
+    draftTitleKey(draft?.title),
+    String(draft?.kind || "manual"),
+    String(draft?.interval || "manual")
+  ].join("|");
+}
+
+function listArticleDrafts() {
+  const dir = articleDraftsDir();
+  if (!fs.existsSync(dir)) return { dir, hasCustomDir: hasCustomDraftsDir(), drafts: [] };
+  const seen = new Set();
+  const drafts = fs.readdirSync(dir)
+    .filter((file) => file.toLowerCase().endsWith(".json"))
+    .map((file) => {
+      const filePath = path.join(dir, file);
+      try {
+        return normalizeDraft(JSON.parse(fs.readFileSync(filePath, "utf8")), filePath);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .filter((draft) => {
+      const key = draftSaveKey(draft);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return { dir, hasCustomDir: hasCustomDraftsDir(), drafts };
+}
+
+function saveArticleDraft(draft) {
+  const dir = articleDraftsDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const next = normalizeDraft({
+    ...draft,
+    id: draft?.id || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    updatedAt: new Date().toISOString()
+  });
+  const nextSaveKey = draftSaveKey(next);
+  for (const file of fs.readdirSync(dir).filter((item) => item.endsWith(".json"))) {
+    const filePath = path.join(dir, file);
+    try {
+      const old = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      if (old?.id === next.id || draftSaveKey(old) === nextSaveKey) fs.rmSync(filePath, { force: true });
+    } catch {}
+  }
+  const filePath = path.join(dir, draftFileName(next));
+  fs.writeFileSync(filePath, JSON.stringify({ ...next, filePath: undefined }, null, 2), "utf8");
+  return normalizeDraft(next, filePath);
+}
+
+function deleteArticleDraft(id) {
+  const dir = articleDraftsDir();
+  if (!fs.existsSync(dir)) return false;
+  let deleted = false;
+  for (const file of fs.readdirSync(dir).filter((item) => item.endsWith(".json"))) {
+    const filePath = path.join(dir, file);
+    try {
+      const draft = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      if (String(draft?.id) === String(id)) {
+        fs.rmSync(filePath, { force: true });
+        deleted = true;
+      }
+    } catch {}
+  }
+  return deleted;
+}
+
+async function pickArticleDraftsDir() {
+  const result = await dialog.showOpenDialog({
+    title: "选择草稿保存路径",
+    defaultPath: articleDraftsDir(),
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true, dir: articleDraftsDir() };
+  const dir = result.filePaths[0];
+  fs.mkdirSync(dir, { recursive: true });
+  writeDraftConfig({ dir });
+  return { canceled: false, dir };
 }
 
 function exportDocumentHtml(bodyHtml, title) {
@@ -380,21 +564,28 @@ app.whenReady().then(() => {
     if (type === "pdf") return savePdfDocument(html, title);
     return saveHtmlLikeDocument(html, title);
   });
+  ipcMain.handle("drafts:list", () => listArticleDrafts());
+  ipcMain.handle("drafts:save", (_event, draft) => saveArticleDraft(draft));
+  ipcMain.handle("drafts:delete", (_event, id) => deleteArticleDraft(id));
+  ipcMain.handle("drafts:pickDir", () => pickArticleDraftsDir());
 
+  createTray();
   createWindow();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showMainWindow();
   });
 });
 
 app.on("second-instance", () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
+  showMainWindow();
 });
 }
 
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (isQuitting && process.platform !== "darwin") app.quit();
 });
 
