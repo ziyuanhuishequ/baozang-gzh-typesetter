@@ -9,6 +9,7 @@
 清喜博客：[https://sucaizy.com](https://sucaizy.com)
 
 <img width="1426" height="913" alt="PixPin_2026-07-10_14-19-14" src="https://github.com/user-attachments/assets/bdcef0d1-4f0c-43c9-9fd7-709fb5eacd04" />
+
 ## 3.7.0 
 - 优化组件定位逻辑：切换主题、头图信息卡、目录、章节标题、引用、结尾、历史文章、图片组件时，会定位到对应区域。
 - 新增文字深浅调节
